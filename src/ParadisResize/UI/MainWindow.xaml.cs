@@ -26,13 +26,26 @@ public partial class MainWindow : Window
     private bool _closeAfterCancel;
     private int _scansRunning;
 
+    // The list can hold thousands of images; counting them on every change would make adding a big
+    // folder slow, so changes only mark the summary stale and a timer refreshes it a few times a second.
+    private readonly System.Windows.Threading.DispatcherTimer _refreshTimer;
+    private bool _refreshPending;
+
     public MainWindow()
     {
         InitializeComponent();
         Title = $"{AppInfo.Name} {AppInfo.Version}";
         VersionFooterText.Text = $"v{AppInfo.Version}";
         QueueList.ItemsSource = _items;
-        _items.CollectionChanged += (_, _) => UpdateQueueView();
+        _refreshTimer = new System.Windows.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(250),
+            System.Windows.Threading.DispatcherPriority.Background, (_, _) => RefreshIfPending(), Dispatcher);
+        _items.CollectionChanged += (_, _) =>
+        {
+            bool any = _items.Count > 0;
+            EmptyPanel.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
+            QueuePanel.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+            ScheduleRefresh();
+        };
 
         // Restore the remembered choices.
         (_settings.Mode == JobMode.Optimize ? OptimizeModeRadio : ResizeModeRadio).IsChecked = true;
@@ -191,13 +204,26 @@ public partial class MainWindow : Window
                 if (item.State != QueueState.Reading) return; // removed, or already processed by a batch
                 if (info != null) item.SetInfo(info);
                 else item.SetUnreadable(error!);
-                UpdateQueueSummary();
-                UpdateResizeHint();
+                ScheduleRefresh();
             }, System.Windows.Threading.DispatcherPriority.Background);
         }
     }
 
     // ======================== The list ========================
+
+    private void ScheduleRefresh()
+    {
+        _refreshPending = true;
+        if (!_refreshTimer.IsEnabled) _refreshTimer.Start();
+    }
+
+    private void RefreshIfPending()
+    {
+        _refreshTimer.Stop();
+        if (!_refreshPending) return;
+        _refreshPending = false;
+        UpdateQueueView();
+    }
 
     private void UpdateQueueView()
     {
