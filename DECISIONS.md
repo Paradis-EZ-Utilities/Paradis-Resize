@@ -49,7 +49,7 @@ correct resampling of images with transparency, CMYK JPEGs, and shrink-on-load f
 
 **Cost.**
 
-- About 19 MB more in the download (the release ZIP is about 35 MB compressed).
+- About 19 MB more in the download: the release ZIP is 64 MB, of which libvips is about a third (the self-contained .NET runtime and WPF are most of the rest).
 - libvips is LGPL-2.1-or-later. That is compatible with an MIT app as long as libvips stays a
   separately replaceable library and its licence and notices are shipped. For that reason
   `libvips-42.dll` sits next to `ParadisResize.exe` instead of being packed into it (which would
