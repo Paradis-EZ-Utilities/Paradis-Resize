@@ -1,0 +1,35 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <!-- The one place the release version is defined. Change only these two lines.
+         VersionPrefix: MAJOR.MINOR.PATCH. VersionSuffix: empty for a release, "rc.N" for a candidate.
+         Everything else is derived: Version ("1.0.0" or "1.0.0-rc.N") is the version shown in the
+         window, About and the log, the exe's Product version, and the release folder/ZIP names
+         (packaging/package-windows.sh reads it with `dotnet msbuild -getProperty:Version`);
+         AssemblyVersion and FileVersion (the exe's File version) are VersionPrefix + ".0". -->
+    <VersionPrefix>1.0.0</VersionPrefix>
+    <VersionSuffix></VersionSuffix>
+    <Version Condition="'$(VersionSuffix)' == ''">$(VersionPrefix)</Version>
+    <Version Condition="'$(VersionSuffix)' != ''">$(VersionPrefix)-$(VersionSuffix)</Version>
+    <AssemblyVersion>$(VersionPrefix).0</AssemblyVersion>
+    <FileVersion>$(VersionPrefix).0</FileVersion>
+    <InformationalVersion>$(Version)</InformationalVersion>
+    <!-- Keep the version string clean (no +commit hash suffix). -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <!-- Debug info inside the assembly: a published build is then a single file with no loose .pdb. -->
+    <DebugType>embedded</DebugType>
+    <!-- Reproducible builds: record source paths as /_/... so the same source gives a byte-identical
+         ParadisResize.exe whichever folder it is built in (lets anyone check the release against
+         the source ZIP). -->
+    <PathMap>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)'))=/_/</PathMap>
+    <!-- ...and whether or not it is a git checkout (no git-dependent Source Link data in the debug info). -->
+    <EnableSourceControlManagerQueries>false</EnableSourceControlManagerQueries>
+    <Company>D.Y. Paradis</Company>
+    <Authors>D.Y. Paradis</Authors>
+    <Product>Paradis Resize</Product>
+    <Copyright>© 2026 D.Y. Paradis</Copyright>
+  </PropertyGroup>
+</Project>

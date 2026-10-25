@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Everything that decides *what* to make and makes it: reading image headers, folder scanning,
+       size planning, output naming, the libvips encode pipeline and the batch runner.
+       No WPF and no Windows-only APIs (the one Windows P/Invoke is guarded at runtime), so the whole
+       engine is tested on any OS against the real libvips. The native libvips binaries are added by
+       the app (win-x64) and by the tests (the current OS), not here. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="NetVips" Version="3.2.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="ParadisResize.Core.Tests" />
+  </ItemGroup>
+</Project>
