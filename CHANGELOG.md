@@ -1,6 +1,8 @@
 # Changelog
 
-## 1.0.0 (unreleased), first prototype
+## 1.0.0 (2026-10-28)
+
+First release.
 
 - Drag and drop images, several images or folders; Add Files and Add Folder; optional subfolders
   (off by default) that never descend into the app's own Resized/Optimized folders.

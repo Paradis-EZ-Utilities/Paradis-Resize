@@ -11,6 +11,8 @@ STARTING IT
 USING IT
   1. Drop images or folders onto the window (or click Add Files / Add Folder).
      PNG, JPEG and WebP. Tick "Include subfolders" to also add images inside sub-folders.
+     (A GIF saved with a .jpg/.png/.webp name gets a still image of its first frame; animation
+     is not kept.)
   2. Choose "Resize images" or "Optimize images".
        Resize:   type a width or a height in pixels (leave the other on Auto), or a percentage.
        Optimize: same width and height, smaller file, same look. Optionally allow a PNG photo
