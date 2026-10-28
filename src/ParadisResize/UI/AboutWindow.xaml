@@ -1,0 +1,41 @@
+<Window x:Class="ParadisResize.UI.AboutWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:ParadisResize.UI"
+        Title="About Paradis Resize" SizeToContent="Height" Width="460"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize" ShowInTaskbar="False"
+        Background="{StaticResource Background}" FontFamily="Segoe UI" UseLayoutRounding="True"
+        TextOptions.TextFormattingMode="Display">
+  <StackPanel Margin="20">
+    <local:Wordmark Height="26" HorizontalAlignment="Left" />
+    <TextBlock x:Name="VersionText" Style="{StaticResource Caption}" FontSize="12" Margin="1,4,0,0" />
+
+    <TextBlock Margin="0,16,0,0" TextWrapping="Wrap" LineHeight="19">
+      Part of <Bold>Paradis EZ Utilities</Bold>: small, simple, free Windows tools.
+    </TextBlock>
+    <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" LineHeight="19" Style="{StaticResource Caption}" FontSize="12">
+      Everything happens on this computer. No account, no internet connection, no ads, no tracking.
+      Original images are never changed: every result is a new copy.
+    </TextBlock>
+    <TextBlock Style="{StaticResource LinkText}" Margin="0,8,0,0" Text="More from Paradis EZ Utilities"
+               MouseLeftButtonUp="OnCollection" />
+    <TextBlock x:Name="CollectionUrlText" Style="{StaticResource Caption}" Margin="0,2,0,0" Visibility="Collapsed" />
+
+    <TextBlock Text="BUNDLED SOFTWARE" Style="{StaticResource SectionHeading}" Margin="0,18,0,8" />
+    <TextBlock TextWrapping="Wrap" LineHeight="19">
+      Images are read and written by <Bold>libvips</Bold> (libvips-42.dll next to this program), with libpng,
+      mozjpeg, libwebp and other libraries built into it, and used through <Bold>NetVips</Bold>.
+      libvips is licensed under the GNU Lesser General Public License, version 2.1 or later; you may replace
+      libvips-42.dll with your own build. Licence texts are in the <Italic>licenses</Italic> folder.
+    </TextBlock>
+    <TextBlock x:Name="LibvipsVersionText" Style="{StaticResource Caption}" Margin="0,8,0,0" TextWrapping="Wrap" />
+
+    <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+      <TextBlock Style="{StaticResource LinkText}" Text="Licences and notices" MouseLeftButtonUp="OnLicenses" />
+      <TextBlock Style="{StaticResource LinkText}" Text="Log folder" Margin="16,0,0,0" MouseLeftButtonUp="OnLogs" />
+    </StackPanel>
+
+    <Button Style="{StaticResource FlatButton}" Content="Close" HorizontalAlignment="Right" Margin="0,18,0,0"
+            IsDefault="True" IsCancel="True" Click="OnClose" />
+  </StackPanel>
+</Window>
