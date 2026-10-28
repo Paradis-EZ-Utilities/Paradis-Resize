@@ -192,6 +192,11 @@ size of the pixel data. 16-bit masters are for editing, which is outside Paradis
 would produce a "successful" copy with half the picture missing. With `fail-on=error` the image
 fails with "Damaged or incomplete" and nothing is saved.
 
+"Not a supported image" is kept for files that are recognisably another kind of image (GIF, BMP,
+TIFF, HEIC/AVIF, JPEG XL, ICO, PSD). A file named like a PNG, JPEG or WebP whose contents can't be
+recognised at all is far more likely to be damaged than to be the wrong type, so it is shown as
+"Couldn't read image".
+
 ## 11. What isn't in v1, on purpose
 
 No crop, filters, metadata editing, watermarks, upscaling, cloud, accounts or settings panel. No

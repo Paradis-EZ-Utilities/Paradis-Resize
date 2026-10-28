@@ -77,9 +77,11 @@ public static class FriendlyErrors
             return new ImageJobException(FailureKind.DestinationNotWritable, "Output folder not available",
                 "The output folder was removed or its drive was disconnected. Choose a folder again.", t, ex);
 
+        // Only files that start like a PNG, JPEG or WebP reach libvips, so if it then can't tell what the
+        // file is, the contents are damaged rather than an unsupported type.
         if (Has("is not a known file format") || Has("not a known file format") || Has("unsupported image format")
             || Has("source not a known format"))
-            return Unsupported(t);
+            return Unreadable(t);
 
         // Decoder complaints: truncated downloads, broken checksums, invalid data.
         if (Has("premature end") || Has("truncated") || Has("crc") || Has("corrupt") || Has("invalid")
@@ -103,11 +105,16 @@ public static class FriendlyErrors
 
     public static ImageJobException Unsupported(string? detail = null) =>
         new(FailureKind.Unsupported, "Not a supported image",
-            "This file isn't a PNG, JPEG or WebP image that Paradis Resize can read.", detail);
+            "This is a type of image Paradis Resize doesn't work with. Only PNG, JPEG and WebP images are supported.", detail);
 
     public static ImageJobException Damaged(string? detail = null) =>
         new(FailureKind.Damaged, "Damaged or incomplete",
             "This image appears to be damaged or incomplete (for example, a download that didn't finish).", detail);
+
+    /// <summary>The name says PNG/JPEG/WebP but the contents aren't recognisable as any image.</summary>
+    public static ImageJobException Unreadable(string? detail = null) =>
+        new(FailureKind.Damaged, "Couldn't read image",
+            "This file couldn't be read as an image. It may be damaged or incomplete, or it may not really be an image.", detail);
 
     public static ImageJobException Animated() =>
         new(FailureKind.Unsupported, "Animated image",

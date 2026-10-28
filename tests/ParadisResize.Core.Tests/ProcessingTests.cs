@@ -358,12 +358,57 @@ public class ProcessingTests
     }
 
     [Fact]
-    public void TextFileNamedPng_IsNotSupported()
+    public void TextFileNamedPng_CouldNotBeRead()
     {
         using var t = new TempDir();
         File.WriteAllText(t.File("fake.png"), "this is not an image");
         var r = Run(Resize50, t.File("fake.png"));
         Assert.Equal(ItemOutcome.Failed, r.Outcome);
+        Assert.Equal("Couldn't read image", r.Status);
+    }
+
+    [Fact]
+    public void JpegWithDamagedStart_CouldNotBeRead_NotUnsupported()
+    {
+        using var t = new TempDir();
+        using (var img = Fixtures.Photo(300, 200)) Fixtures.SaveJpeg(img, t.File("Photo.jpg"), 90);
+        byte[] bytes = File.ReadAllBytes(t.File("Photo.jpg"));
+        bytes.AsSpan(0, 64).Fill(0);
+        File.WriteAllBytes(t.File("Photo.jpg"), bytes);
+
+        var r = Run(Resize50, t.File("Photo.jpg"));
+
+        Assert.Equal(ItemOutcome.Failed, r.Outcome);
+        Assert.Equal("Couldn't read image", r.Status);
+        AssertNoPartials(t);
+    }
+
+    [Fact]
+    public void JpegWithDamagedData_IsReportedAsDamaged_NotUnsupported()
+    {
+        using var t = new TempDir();
+        using (var img = Fixtures.Photo(300, 200)) Fixtures.SaveJpeg(img, t.File("Photo.jpg"), 90);
+        byte[] bytes = File.ReadAllBytes(t.File("Photo.jpg"));
+        // Keep the JPEG start marker, scramble everything after it.
+        var rng = new Random(7);
+        for (int i = 4; i < bytes.Length; i++) bytes[i] = (byte)rng.Next(256);
+        File.WriteAllBytes(t.File("Photo.jpg"), bytes);
+
+        var r = Run(Resize50, t.File("Photo.jpg"));
+
+        Assert.Equal(ItemOutcome.Failed, r.Outcome);
+        Assert.Contains(r.Status, new[] { "Damaged or incomplete", "Couldn't read image" });
+        AssertNoPartials(t);
+    }
+
+    [Fact]
+    public void BmpRenamedToJpg_IsNotSupported()
+    {
+        using var t = new TempDir();
+        byte[] bmp = new byte[64];
+        "BM"u8.CopyTo(bmp);
+        File.WriteAllBytes(t.File("scan.jpg"), bmp);
+        var r = Run(Resize50, t.File("scan.jpg"));
         Assert.Equal("Not a supported image", r.Status);
     }
 

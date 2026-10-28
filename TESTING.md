@@ -24,8 +24,9 @@ What they cover:
   lossy WebP keeps transparency.
 - **Conversion.** Photo-like PNG → JPEG; screenshot-like PNG stays PNG; a PNG with any transparent
   pixel stays PNG with alpha; manual JPEG on a transparent PNG is skipped, never flattened.
-- **Failures.** Truncated PNG ("Damaged or incomplete"), a text file named `.png` and a GIF named
-  `.png` ("Not a supported image"), a missing file, an image too wide for WebP; a bad image in the
+- **Failures.** Truncated PNG and a JPEG with scrambled data ("Damaged or incomplete"), a text file
+  named `.png` and a JPEG with an overwritten start ("Couldn't read image"), a GIF named `.png` and a
+  BMP named `.jpg` ("Not a supported image"), a missing file, an image too wide for WebP; a bad image in the
   middle of a batch doesn't stop it; cancel keeps finished files and counts the rest.
 - **Scanning.** Subfolders off by default; `Resized`/`Optimized` folders and the custom output folder
   are never scanned; partial files ignored; duplicates not added twice; a folder dropped directly is
