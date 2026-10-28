@@ -150,17 +150,21 @@ public sealed class ImageProcessor
         bool sameSize = size.IsSameAs(info.Width, info.Height);
 
         // ---- Resize ----
+        // A GIF is never copied unchanged: the copy would still be a GIF (and still animated) with the wrong name.
+        if (info.IsGif)
+            CoreLog.Info($"  Recovering the first of {info.FrameCount} GIF frame(s) as a still image; animation is not kept");
+
         if (!optimize)
         {
             CoreLog.Info($"  Plan: {info.Width}x{info.Height} -> {size.Width}x{size.Height} as {Describe(targetEncoding)}");
-            if (sameSize && manual == null && info.Orientation == 1)
+            if (sameSize && manual == null && info.Orientation == 1 && !info.IsGif)
             {
                 string why = _settings.Resize.DontEnlarge ? "Already this size or smaller" : "Already this size";
                 return CopyOriginal(info, folder, stem, jobId, temps, setFinal, why,
                     $"{why}, so the original was copied unchanged (not enlarged or re-saved).");
             }
             var c = Encode(info, size, targetEncoding, dropAlpha, folder, stem, jobId, temps, progress, 0, 1, ct);
-            return Finish(info, c, size, folder, stem, temps, setFinal, converted: manual != null,
+            return Finish(info, c, size, folder, stem, temps, setFinal, converted: manual != null || info.IsGif,
                 note: c.Size > info.FileSize ? "The new file is larger than the original." : null);
         }
 
@@ -187,8 +191,8 @@ public sealed class ImageProcessor
             }
         }
 
-        bool converted = manual != null || chosen.Encoding == Encoding.Jpeg && info.Format != ImageFormat.Jpeg;
-        if (manual == null)
+        bool converted = manual != null || info.IsGif || chosen.Encoding == Encoding.Jpeg && info.Format != ImageFormat.Jpeg;
+        if (manual == null && !info.IsGif)
         {
             // Keep only a worthwhile saving; otherwise the original is the better file.
             double minSaving = chosen.Encoding is Encoding.PngLossless or Encoding.WebPLossless && !converted
@@ -212,8 +216,9 @@ public sealed class ImageProcessor
     {
         ImageFormat.Png => Encoding.PngLossless,
         ImageFormat.Jpeg => Encoding.Jpeg,
-        // A lossless WebP (usually a graphic) stays lossless; anything else saved as WebP is a high-quality lossy WebP.
-        _ => info.Format == ImageFormat.WebP && info.IsLosslessWebP ? Encoding.WebPLossless : Encoding.WebPLossy,
+        // A lossless WebP (usually a graphic) stays lossless, as does a GIF frame (at most 256 colours, so
+        // lossless is exact and small); anything else saved as WebP is a high-quality lossy WebP.
+        _ => info.Format == ImageFormat.WebP && info.IsLosslessWebP || info.IsGif ? Encoding.WebPLossless : Encoding.WebPLossy,
     };
 
     private static ImageFormat FormatOf(Encoding e) => e switch
@@ -380,12 +385,22 @@ public sealed class ImageProcessor
         string final = MoveIntoPlace(info, chosen.Path, folder, stem, SupportedFormats.ExtensionFor(info.Path, format), setFinal);
         temps.Remove(chosen.Path);
         CoreLog.Info($"  Saved {final} ({chosen.Size:N0} bytes, {Units.PercentSaved(info.FileSize, chosen.Size)}% smaller" +
-                     $"{(converted ? $", converted {SupportedFormats.DisplayName(info.Format)} -> {SupportedFormats.DisplayName(format)}" : "")})");
+                     $"{(converted ? $", converted {info.SourceFormatName} -> {SupportedFormats.DisplayName(format)}" : "")})");
+        string? message = note;
+        if (info.IsGif)
+        {
+            // Animated GIFs shrink hugely just by losing their other frames, so the size comparison isn't one.
+            message = (info.FrameCount > 1
+                ? $"Recovered from GIF: this file is really an animated GIF ({info.FrameCount:N0} frames). Only the first frame was saved, as a still {SupportedFormats.DisplayName(format)} image; the animation was not kept."
+                : $"Recovered from GIF: this file is really a GIF. It was saved as a still {SupportedFormats.DisplayName(format)} image.")
+                + " The original is untouched.";
+        }
         return new ItemResult
         {
             Outcome = ItemOutcome.Done,
-            Status = converted ? $"Done (now {SupportedFormats.DisplayName(format)})" : "Done",
-            Message = note,
+            Status = info.IsGif ? $"Done (GIF → {SupportedFormats.DisplayName(format)})"
+                : converted ? $"Done (now {SupportedFormats.DisplayName(format)})" : "Done",
+            Message = message,
             OutputPath = final,
             OutputSize = chosen.Size,
             OutputWidth = size.Width,
@@ -459,6 +474,7 @@ public sealed class ImageProcessor
         return m.Contains("load", StringComparison.OrdinalIgnoreCase) || m.Contains("read", StringComparison.OrdinalIgnoreCase)
             || m.Contains("png", StringComparison.OrdinalIgnoreCase) && !m.Contains("pngsave", StringComparison.OrdinalIgnoreCase)
             || m.Contains("jpeg", StringComparison.OrdinalIgnoreCase) && !m.Contains("jpegsave", StringComparison.OrdinalIgnoreCase)
+            || m.Contains("gif", StringComparison.OrdinalIgnoreCase)
             || m.Contains("truncated", StringComparison.OrdinalIgnoreCase) || m.Contains("premature", StringComparison.OrdinalIgnoreCase);
     }
 

@@ -550,7 +550,7 @@ public partial class MainWindow : Window
                 if (p.Result.Saved)
                 {
                     done++;
-                    savedBytes += (p.Result.Source?.FileSize ?? 0) - p.Result.OutputSize;
+                    if (p.Result.Source is { IsGif: false } source) savedBytes += source.FileSize - p.Result.OutputSize;
                 }
                 else if (p.Result.Outcome is ItemOutcome.Failed or ItemOutcome.Skipped) failed++;
             }

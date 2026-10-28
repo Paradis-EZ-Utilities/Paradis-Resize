@@ -46,6 +46,15 @@ public partial class SummaryWindow : Window
             ProblemsText.Visibility = Visibility.Visible;
         }
 
+        if (summary.RecoveredFromGif > 0)
+        {
+            GifText.Text = (summary.RecoveredFromGif == 1
+                    ? "1 file was really a GIF with the wrong name. A still image was recovered from its first frame; any animation was not kept."
+                    : $"{summary.RecoveredFromGif:N0} files were really GIFs with the wrong name. A still image was recovered from each one's first frame; any animation was not kept.")
+                + " These aren't included in the sizes above.";
+            GifText.Visibility = Visibility.Visible;
+        }
+
         // One output folder can be opened directly. Copies spread over a "Resized" folder in each source
         // folder can't be shown as one place, so the window says where they are instead.
         string folderName = mode == JobMode.Resize ? OutputPlanner.ResizedFolderName : OutputPlanner.OptimizedFolderName;

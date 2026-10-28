@@ -33,6 +33,8 @@
 
     <TextBlock x:Name="ProblemsText" FontSize="13" Margin="0,12,0,0" TextWrapping="Wrap" Foreground="{StaticResource Warning}"
                Visibility="Collapsed" />
+    <TextBlock x:Name="GifText" Style="{StaticResource Caption}" FontSize="12" Margin="0,12,0,0" TextWrapping="Wrap"
+               Visibility="Collapsed" />
     <TextBlock x:Name="WhereText" Style="{StaticResource Caption}" FontSize="12" Margin="0,12,0,0" TextWrapping="Wrap" />
     <TextBlock Style="{StaticResource Caption}" FontSize="12" Margin="0,6,0,0" TextWrapping="Wrap"
                Text="Your original images were not changed. Compare the new copies before deleting anything." />

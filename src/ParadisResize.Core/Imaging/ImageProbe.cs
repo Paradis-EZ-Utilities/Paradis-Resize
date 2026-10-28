@@ -27,11 +27,13 @@ public static class ImageProbe
 
         // libvips can open many more formats (GIF, TIFF, HEIF, SVG, ...). Refuse them before asking it,
         // so nothing outside PNG/JPEG/WebP is ever handed to a decoder.
-        // A file that is recognisably another kind of image (a GIF renamed to .png) is "not supported";
-        // a file whose contents aren't recognisable at all, although its name says PNG/JPEG/WebP, is
-        // reported as unreadable, because it is most likely damaged rather than the wrong type.
+        // A GIF with a PNG/JPEG/WebP name (common with downloaded pictures) is let through: its first frame
+        // is recovered as a still image. A file that is recognisably another kind of image (a BMP renamed
+        // to .jpg) is "not supported"; a file whose contents aren't recognisable at all, although its name
+        // says PNG/JPEG/WebP, is reported as unreadable, because it is most likely damaged.
         ImageFormat? sniffed = Sniff(path, out string? otherFormat);
-        if (sniffed == null)
+        bool isGif = sniffed == null && otherFormat == GifName;
+        if (sniffed == null && !isGif)
         {
             if (otherFormat != null) throw FriendlyErrors.Unsupported($"{otherFormat} contents in {path}");
             throw FriendlyErrors.Unreadable($"unrecognised signature in {path}");
@@ -62,10 +64,14 @@ public static class ImageProbe
                 _ when loader.StartsWith("png", StringComparison.Ordinal) => ImageFormat.Png,
                 _ when loader.StartsWith("jpeg", StringComparison.Ordinal) => ImageFormat.Jpeg,
                 _ when loader.StartsWith("webp", StringComparison.Ordinal) => ImageFormat.WebP,
+                // Only the first frame of a GIF is ever decoded (libvips' default), and it is handled as a PNG.
+                _ when isGif && loader.StartsWith("gif", StringComparison.Ordinal) => ImageFormat.Png,
+                _ when isGif => throw FriendlyErrors.Unreadable($"GIF signature but libvips loader '{loader}'"),
                 _ => throw FriendlyErrors.Unsupported($"libvips loader '{loader}'"),
             };
 
-            if (img.Contains("n-pages") && img.Get("n-pages") is int pages && pages > 1)
+            int frames = img.Contains("n-pages") && img.Get("n-pages") is int pages && pages > 1 ? pages : 1;
+            if (frames > 1 && !isGif)
                 throw FriendlyErrors.Animated();
 
             int orientation = img.Contains("orientation") && img.Get("orientation") is int o && o is >= 1 and <= 8 ? o : 1;
@@ -85,6 +91,8 @@ public static class ImageProbe
                 ColourSpace = interpretation.ToString().ToLowerInvariant(),
                 Bands = img.Bands,
                 HasIccProfile = img.Contains("icc-profile-data"),
+                IsGif = isGif,
+                FrameCount = frames,
             };
         }
     }
@@ -117,10 +125,12 @@ public static class ImageProbe
         return null;
     }
 
+    private const string GifName = "GIF";
+
     /// <summary>Names other image formats people commonly have, so they can be told apart from damaged files.</summary>
     private static string? OtherImageFormat(ReadOnlySpan<byte> b)
     {
-        if (b.StartsWith("GIF8"u8)) return "GIF";
+        if (b.StartsWith("GIF8"u8)) return GifName;
         if (b.StartsWith("BM"u8) && b.Length >= 6) return "BMP";
         if (b.StartsWith("II*\0"u8) || b.StartsWith("MM\0*"u8)) return "TIFF";
         if (b.Length >= 12 && b[4..8].SequenceEqual("ftyp"u8)) return "HEIF/AVIF";

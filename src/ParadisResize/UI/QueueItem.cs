@@ -56,7 +56,7 @@ public sealed class QueueItem : INotifyPropertyChanged
         }
     }
 
-    public string FormatText => Info != null ? SupportedFormats.DisplayName(Info.Format)
+    public string FormatText => Info != null ? Info.SourceFormatName
         : (SupportedFormats.FromExtension(Path) is ImageFormat f ? SupportedFormats.DisplayName(f) : "");
 
     public string DimensionsText
@@ -90,7 +90,8 @@ public sealed class QueueItem : INotifyPropertyChanged
         get
         {
             if (Info == null || Result is not { Saved: true } r) return "";
-            if (r.Outcome == ItemOutcome.CopiedUnchanged) return "–";
+            // A still recovered from a GIF isn't a saving: an animation's other frames were simply left out.
+            if (r.Outcome == ItemOutcome.CopiedUnchanged || Info.IsGif) return "–";
             int pct = Units.PercentSaved(Info.FileSize, r.OutputSize);
             return pct >= 0 ? $"{pct}%" : $"+{-pct}% larger";
         }
@@ -99,7 +100,7 @@ public sealed class QueueItem : INotifyPropertyChanged
     public string StatusText => State switch
     {
         QueueState.Reading => "Reading…",
-        QueueState.Ready => "Ready",
+        QueueState.Ready => Info is { IsGif: true } ? "Ready (GIF, still image only)" : "Ready",
         QueueState.Unreadable => ReadError ?? "Can't read",
         QueueState.Waiting => "Waiting",
         QueueState.Working => Progress > 0.01 ? $"Working… {Progress:P0}" : "Working…",
@@ -122,7 +123,11 @@ public sealed class QueueItem : INotifyPropertyChanged
         get
         {
             var lines = new List<string> { Path };
-            if (Info != null) lines.Add($"{SupportedFormats.DisplayName(Info.Format)}, {Units.FormatDimensions(Info.Width, Info.Height)}, {Units.FormatBytes(Info.FileSize)}");
+            if (Info != null) lines.Add($"{Info.SourceFormatName}, {Units.FormatDimensions(Info.Width, Info.Height)}, {Units.FormatBytes(Info.FileSize)}");
+            if (Info is { IsGif: true } && Result == null)
+                lines.Add(Info.FrameCount > 1
+                    ? $"This file is really an animated GIF ({Info.FrameCount:N0} frames) with the wrong name. Only its first frame will be saved, as a still image; the animation won't be kept."
+                    : "This file is really a GIF with the wrong name. It will be saved as a still image in a supported format.");
             if (State == QueueState.Unreadable && ReadError != null) lines.Add(ReadErrorMessage ?? ReadError);
             if (Result?.Message != null) lines.Add(Result.Message);
             if (Result?.OutputPath != null) lines.Add($"Saved as: {Result.OutputPath}");

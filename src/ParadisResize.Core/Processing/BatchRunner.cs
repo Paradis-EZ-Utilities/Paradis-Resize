@@ -24,7 +24,13 @@ public sealed record BatchSummary
 
     public bool Cancelled { get; init; }
 
-    /// <summary>Sizes of the images that were saved (processed or copied), before and after.</summary>
+    /// <summary>Still images recovered from GIFs with a PNG/JPEG/WebP name (included in <see cref="Done"/>).</summary>
+    public int RecoveredFromGif { get; init; }
+
+    /// <summary>
+    /// Sizes of the images that were saved (processed or copied), before and after. Images recovered from
+    /// GIFs aren't counted: dropping an animation's other frames isn't a saving to report.
+    /// </summary>
     public long OriginalBytes { get; init; }
     public long NewBytes { get; init; }
 
@@ -59,7 +65,7 @@ public sealed class BatchRunner
         var planner = new OutputPlanner(_settings.Mode, _settings.CustomOutputFolder);
         var processor = new ImageProcessor(_settings, planner);
         var folders = new List<string>();
-        int done = 0, copied = 0, skipped = 0, failed = 0, notProcessed = 0;
+        int done = 0, copied = 0, skipped = 0, failed = 0, notProcessed = 0, fromGif = 0;
         long originalBytes = 0, newBytes = 0;
         bool cancelled = false;
 
@@ -100,10 +106,14 @@ public sealed class BatchRunner
                 case ItemOutcome.Failed: failed++; break;
                 case ItemOutcome.Cancelled: cancelled = true; notProcessed++; break;
             }
+            if (result.Saved && result.Source is { IsGif: true }) fromGif++;
             if (result.Saved && result.Source != null)
             {
-                originalBytes += result.Source.FileSize;
-                newBytes += result.OutputSize;
+                if (!result.Source.IsGif)
+                {
+                    originalBytes += result.Source.FileSize;
+                    newBytes += result.OutputSize;
+                }
                 string? folder = Path.GetDirectoryName(result.OutputPath);
                 if (folder != null && !folders.Contains(folder, StringComparer.OrdinalIgnoreCase)) folders.Add(folder);
             }
@@ -126,6 +136,7 @@ public sealed class BatchRunner
             Skipped = skipped,
             Failed = failed,
             NotProcessed = notProcessed,
+            RecoveredFromGif = fromGif,
             Cancelled = cancelled,
             OriginalBytes = originalBytes,
             NewBytes = newBytes,
@@ -133,7 +144,7 @@ public sealed class BatchRunner
             Elapsed = sw.Elapsed,
         };
         CoreLog.Info($"Batch {(cancelled ? "cancelled" : "finished")} in {Units.FormatDuration(summary.Elapsed)}: " +
-                     $"{done} processed, {copied} copied unchanged, {skipped} skipped, {failed} failed, {notProcessed} not processed; " +
+                     $"{done} processed ({fromGif} recovered from GIF), {copied} copied unchanged, {skipped} skipped, {failed} failed, {notProcessed} not processed; " +
                      $"{originalBytes:N0} -> {newBytes:N0} bytes ({Units.PercentSaved(originalBytes, newBytes)}% smaller)");
         return summary;
     }

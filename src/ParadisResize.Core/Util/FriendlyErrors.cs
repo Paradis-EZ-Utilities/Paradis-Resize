@@ -87,6 +87,7 @@ public static class FriendlyErrors
         if (Has("premature end") || Has("truncated") || Has("crc") || Has("corrupt") || Has("invalid")
             || Has("read error") || Has("not a PNG") || Has("not a JPEG") || Has("bad ") || Has("unexpected end")
             || Has("decode") || Has("libspng") || Has("pngload") || Has("jpegload") || Has("webpload") || Has("VipsJpeg")
+            || Has("gifload") || Has("nsgif")
             || Has("out of order read"))
             return Damaged(t);
 

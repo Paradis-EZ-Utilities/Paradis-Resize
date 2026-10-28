@@ -17,4 +17,7 @@
 - Daily log `ParadisResize-YYYYMMDD.log` in `%LocalAppData%\ParadisResize\Logs`.
 - Damaged files are told apart from unsupported ones: a corrupted PNG/JPEG/WebP shows "Couldn't read
   image" or "Damaged or incomplete"; "Not a supported image" is only for other image types such as
-  GIF or BMP.
+  BMP or TIFF.
+- A GIF with a `.jpg`, `.png` or `.webp` name is no longer refused: a still image is recovered from its
+  first frame ("Done (GIF → PNG)" and so on). Animation is never kept, and `.gif` files are still not
+  picked up.

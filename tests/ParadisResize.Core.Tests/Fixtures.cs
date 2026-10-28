@@ -104,6 +104,38 @@ public static class Fixtures
         return path;
     }
 
+    /// <summary>
+    /// An animated GIF whose frames are flat colours (frame 1 = <paramref name="colours"/>[0], ...), saved under
+    /// whatever name is given, as browsers and download tools sometimes do (a GIF named ".jpg").
+    /// </summary>
+    public static string SaveAnimatedGif(string path, int width, int height, params double[][] colours)
+    {
+        var frames = colours.Select(c => Image.Black(width, height, bands: 3).NewFromImage(c)
+            .Cast(Enums.BandFormat.Uchar).Copy(interpretation: Enums.Interpretation.Srgb)).ToArray();
+        try
+        {
+            using var strip = Image.Arrayjoin(frames, across: 1);
+            using var anim = strip.Mutate(m =>
+            {
+                m.Set(GValue.GIntType, "page-height", height);
+                m.Set(GValue.ArrayIntType, "delay", Enumerable.Repeat(100, colours.Length).ToArray());
+            });
+            anim.Gifsave(path);
+        }
+        finally
+        {
+            foreach (var f in frames) f.Dispose();
+        }
+        return path;
+    }
+
+    /// <summary>The colour of one pixel, as whole numbers.</summary>
+    public static int[] PixelAt(string path, int x, int y)
+    {
+        using var img = Image.NewFromFile(path);
+        return img.Getpoint(x, y).Select(v => (int)Math.Round(v)).ToArray();
+    }
+
     public static string Hash(string path) => Convert.ToHexString(SHA256.HashData(System.IO.File.ReadAllBytes(path)));
 
     /// <summary>Largest per-pixel difference between two images of the same size (0 = identical).</summary>

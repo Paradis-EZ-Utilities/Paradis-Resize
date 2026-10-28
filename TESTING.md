@@ -25,9 +25,15 @@ What they cover:
 - **Conversion.** Photo-like PNG → JPEG; screenshot-like PNG stays PNG; a PNG with any transparent
   pixel stays PNG with alpha; manual JPEG on a transparent PNG is skipped, never flattened.
 - **Failures.** Truncated PNG and a JPEG with scrambled data ("Damaged or incomplete"), a text file
-  named `.png` and a JPEG with an overwritten start ("Couldn't read image"), a GIF named `.png` and a
-  BMP named `.jpg` ("Not a supported image"), a missing file, an image too wide for WebP; a bad image in the
+  named `.png` and a JPEG with an overwritten start ("Couldn't read image"), a BMP named `.jpg`
+  ("Not a supported image"), a missing file, an image too wide for WebP; a bad image in the
   middle of a batch doesn't stop it; cancel keeps finished files and counts the rest.
+- **GIFs with the wrong name.** An animated GIF named `.jpg` gives a PNG of its first frame only
+  ("Done (GIF → PNG)"), original untouched; same size still saves a copy rather than copying the GIF;
+  Save as JPEG/WebP respected (WebP lossless and exact); a transparent GIF stays PNG with
+  transparency even with conversion allowed, and Save as JPEG skips it; a damaged GIF fails cleanly;
+  the batch counts recovered GIFs and leaves them out of the space saved; real `.gif` files are not
+  picked up.
 - **Scanning.** Subfolders off by default; `Resized`/`Optimized` folders and the custom output folder
   are never scanned; partial files ignored; duplicates not added twice; a folder dropped directly is
   scanned even if it is called `Resized`.
@@ -57,3 +63,6 @@ first run on Windows 10/11:
 8. The summary: Open Output Folder with one folder; no button when copies went to several folders.
 9. About, Log folder, More from Paradis EZ Utilities.
 10. Close during a batch asks first; Windows display scaling at 150%.
+11. An animated GIF renamed `.jpg`: the list shows GIF and "Ready (GIF, still image only)", the
+    tooltip mentions the frames; after processing "Done (GIF → PNG)", the copy is a still PNG of the
+    first frame, and the summary says a still was recovered.

@@ -31,6 +31,19 @@ public sealed record ImageInfo
 
     public bool HasIccProfile { get; init; }
 
+    /// <summary>
+    /// The file is really a GIF, although its name says PNG, JPEG or WebP. Only its first frame is used, as a
+    /// still image, and it is handled like a PNG (<see cref="Format"/> is Png): lossless, transparency kept.
+    /// Animation is never kept; see DECISIONS.md.
+    /// </summary>
+    public bool IsGif { get; init; }
+
+    /// <summary>Frames in the file (more than 1 for an animated GIF).</summary>
+    public int FrameCount { get; init; } = 1;
+
+    /// <summary>What the file really is, for the list: "PNG", "JPEG", "WebP" or "GIF".</summary>
+    public string SourceFormatName => IsGif ? "GIF" : SupportedFormats.DisplayName(Format);
+
     /// <summary>Stored sideways, so the upright picture swaps width and height.</summary>
     public bool IsRotated90 => Orientation is >= 5 and <= 8;
 
@@ -41,7 +54,8 @@ public sealed record ImageInfo
     public long PixelCount => (long)StoredWidth * StoredHeight;
 
     public string Describe() =>
-        $"{SupportedFormats.DisplayName(Format)}{(Format == ImageFormat.WebP ? (IsLosslessWebP ? " lossless" : " lossy") : "")} " +
+        $"{SourceFormatName}{(Format == ImageFormat.WebP && !IsGif ? (IsLosslessWebP ? " lossless" : " lossy") : "")}" +
+        $"{(IsGif ? $" ({FrameCount} frame{(FrameCount == 1 ? "" : "s")}, first frame used as a still image)" : "")} " +
         $"{StoredWidth}x{StoredHeight}{(Orientation != 1 ? $" orientation={Orientation} (shown {Width}x{Height})" : "")}, " +
         $"{Bands} bands {ColourSpace}{(IsHighBitDepth ? " 16-bit" : "")}{(HasAlphaChannel ? ", alpha" : "")}{(HasIccProfile ? ", ICC profile" : "")}, " +
         $"{FileSize:N0} bytes";

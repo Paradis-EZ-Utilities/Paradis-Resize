@@ -20,6 +20,8 @@ every result is a new copy.
   a worthwhile amount. Optional **Allow format conversion for smaller files** lets a PNG photo with
   no transparency become a much smaller JPEG.
 - **Save as:** same format as the original (default), PNG, JPEG or WebP.
+- A GIF that was saved with a `.jpg`, `.png` or `.webp` name is recognised, and a still image is
+  recovered from its first frame (saved as PNG unless you choose otherwise). Animation is not kept.
 - Copies go into a **Resized** or **Optimized** folder next to each original, or a folder you choose.
   Existing files are never overwritten: a clash becomes `Image (1).png`, `Image (2).png`, ….
 - A list with each image's format, dimensions, size and status; afterwards the new dimensions, new

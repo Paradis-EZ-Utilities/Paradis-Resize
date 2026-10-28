@@ -61,12 +61,13 @@ correct resampling of images with transparency, CMYK JPEGs, and shrink-on-load f
 ## 2. Header first, format from content
 
 **Decision.** Files are recognised by their first bytes (PNG, JPEG, WebP signatures), not their
-extension, and only those three formats are ever passed to libvips. Headers are read for the list
-without decoding pixels.
+extension, and only those three formats are ever passed to libvips, plus GIFs that carry a PNG,
+JPEG or WebP name (see 12). Headers are read for the list without decoding pixels.
 
 **Why.** A JPEG renamed `.png` is common and must be treated as a JPEG. The bundled libvips can
 also open GIF, TIFF, HEIF, SVG and more; refusing everything else before libvips sees it keeps the
 attack surface and the behaviour exactly as specified (no animated GIF handling, no scope creep).
+Files actually named `.gif` are still not picked up.
 Animated WebP is detected and refused with "Animated image".
 
 ## 3. Originals are only ever read; copies appear only when finished
@@ -192,7 +193,7 @@ size of the pixel data. 16-bit masters are for editing, which is outside Paradis
 would produce a "successful" copy with half the picture missing. With `fail-on=error` the image
 fails with "Damaged or incomplete" and nothing is saved.
 
-"Not a supported image" is kept for files that are recognisably another kind of image (GIF, BMP,
+"Not a supported image" is kept for files that are recognisably another kind of image (BMP,
 TIFF, HEIC/AVIF, JPEG XL, ICO, PSD). A file named like a PNG, JPEG or WebP whose contents can't be
 recognised at all is far more likely to be damaged than to be the wrong type, so it is shown as
 "Couldn't read image".
@@ -203,3 +204,27 @@ No crop, filters, metadata editing, watermarks, upscaling, cloud, accounts or se
 quality slider: the encoder choices above are made for the user. No "replace original" option.
 The only remembered settings are the visible ones (mode, sizes, checkboxes, Save as); a custom
 output folder is not remembered, so every session starts with the predictable default.
+
+## 12. GIFs with the wrong name: a still image is recovered
+
+**Decision.** A file named `.jpg`, `.png` or `.webp` that is really a GIF (common with downloaded
+pictures) is not refused. Its first frame is decoded, as libvips does by default, and treated as a
+PNG from then on: the same resize, the same transparency checks and the same conversion rules.
+
+- Same format as original saves a **PNG**: a GIF frame has at most 256 colours, so PNG keeps it
+  exactly, transparency included. With "Allow format conversion" an opaque frame becomes a JPEG under
+  the usual rule (JPEG at most half the PNG's size). Save as JPEG on a frame with transparency is
+  skipped as for any PNG. Save as WebP is lossless, so the frame is kept exactly.
+- The copy is always made, never "copied unchanged": copying would just give another GIF, possibly
+  still animated, with the wrong name.
+- Status is "Done (GIF → PNG)", "Done (GIF → JPEG)" or "Done (GIF → WebP)", the list's format
+  column says GIF, the tooltip says how many frames there were and that the animation was not kept,
+  and the summary counts these files separately.
+- They aren't counted in the space saved, and their row shows no "% saved": leaving out an
+  animation's other frames isn't a saving.
+- Damaged GIFs fail with "Damaged or incomplete" or "Couldn't read image" like any other image.
+
+**Why.** These files are intact pictures with the wrong extension, so refusing them isn't helpful.
+Recovering a still keeps Paradis Resize a still-image tool: there is no animation support of any
+kind, and files named `.gif` are still left alone.
+

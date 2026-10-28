@@ -413,15 +413,6 @@ public class ProcessingTests
     }
 
     [Fact]
-    public void GifRenamedToPng_IsNotSupported()
-    {
-        using var t = new TempDir();
-        using (var img = Fixtures.Graphic(50, 50)) img.Gifsave(t.File("anim.png"));
-        var r = Run(Resize50, t.File("anim.png"));
-        Assert.Equal("Not a supported image", r.Status);
-    }
-
-    [Fact]
     public void MissingFile_Fails()
     {
         using var t = new TempDir();
