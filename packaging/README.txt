@@ -10,9 +10,11 @@ STARTING IT
 
 USING IT
   1. Drop images or folders onto the window (or click Add Files / Add Folder).
-     PNG, JPEG and WebP. Tick "Include subfolders" to also add images inside sub-folders.
-     (A GIF saved with a .jpg/.png/.webp name gets a still image of its first frame; animation
-     is not kept.)
+     PNG, JPEG, WebP, BMP and AVIF. Tick "Include subfolders" to also add images inside
+     sub-folders. BMP copies are saved as PNG (or JPEG). An animated WebP, or a GIF saved with
+     an image name like .jpg, gets a still image of its first frame; animation is not kept.
+     Files named .gif are left alone. A picture with the wrong extension (a JPEG named .tiff)
+     is recognised by its contents. The log lists every file that was left out, and why.
   2. Choose "Resize images" or "Optimize images".
        Resize:   type a width or a height in pixels (leave the other on Auto), or a percentage.
        Optimize: same width and height, smaller file, same look. Optionally allow a PNG photo

@@ -11,7 +11,7 @@ every result is a new copy.
 
 - Drag and drop images, several images, or folders, or use **Add Files** / **Add Folder**.
   **Include subfolders** is off by default.
-- PNG, JPEG and WebP. Built for very large files: a 350 MB, 12000 × 10000 PNG is resized in about
+- PNG, JPEG, WebP, BMP and AVIF. Built for very large files: a 350 MB, 12000 × 10000 PNG is resized in about
   10 seconds using under 300 MB of memory.
 - **Resize images:** a width, a height, or both (in pixels, an empty box means Auto), or a
   percentage. **Keep proportions** and **Don't enlarge smaller images** are on by default.
@@ -19,9 +19,13 @@ every result is a new copy.
   without changing a single pixel; JPEG and WebP are re-saved at high quality only when that saves
   a worthwhile amount. Optional **Allow format conversion for smaller files** lets a PNG photo with
   no transparency become a much smaller JPEG.
-- **Save as:** same format as the original (default), PNG, JPEG or WebP.
-- A GIF that was saved with a `.jpg`, `.png` or `.webp` name is recognised, and a still image is
-  recovered from its first frame (saved as PNG unless you choose otherwise). Animation is not kept.
+- **Save as:** same format as the original (default), PNG, JPEG or WebP. BMPs become PNG (BMP is
+  read, never written); AVIF stays AVIF.
+- An animated WebP, or a GIF that was saved with a `.jpg`, `.png` or `.webp` name, gives a still
+  image of its first frame (an animated WebP stays WebP; a GIF becomes PNG unless you choose
+  otherwise). Animation is not kept, and files named `.gif` are left alone.
+- Files are recognised by their contents, so a JPEG named `.png`, or even `.tiff`, is handled as the
+  JPEG it is. The log lists every file that was left out, and why.
 - Copies go into a **Resized** or **Optimized** folder next to each original, or a folder you choose.
   Existing files are never overwritten: a clash becomes `Image (1).png`, `Image (2).png`, ….
 - A list with each image's format, dimensions, size and status; afterwards the new dimensions, new
@@ -31,7 +35,7 @@ every result is a new copy.
 
 ## Running it
 
-1. Unzip `ParadisResize-1.0.0-win-x64.zip` anywhere and keep `libvips-42.dll` next to
+1. Unzip `ParadisResize-1.0.1-win-x64.zip` anywhere and keep `libvips-42.dll` next to
    `ParadisResize.exe`.
 2. Double-click `ParadisResize.exe`. Nothing is installed; there is no separate .NET to install.
 3. The build is not code-signed, so Windows SmartScreen may say "Windows protected your PC".
@@ -50,7 +54,10 @@ Requires 64-bit Windows 10 or 11.
 | **Optimize**, PNG | Re-compressed losslessly (every pixel identical). An alpha channel that is fully opaque is dropped. Kept only if at least 2% smaller; otherwise the original is copied unchanged and marked *Already efficient*. |
 | **Optimize**, JPEG | Re-saved at quality 88. Kept only if at least 10% smaller, so an already-compressed JPEG isn't degraded for nothing. |
 | **Optimize**, WebP | Lossless WebP stays lossless; lossy WebP is re-saved at quality 85. Transparency is kept. Same 2% / 10% rules. |
-| **Optimize** + **Allow format conversion** | A PNG with no transparency becomes a JPEG only if the JPEG is at most half the size of the optimized PNG. Photos qualify; screenshots, drawings and text stay PNG. |
+| **Optimize**, AVIF | Re-saved at AVIF quality 60, kept only if at least 10% smaller. |
+| **Optimize** + **Allow format conversion** | A PNG with no transparency becomes a JPEG only if the JPEG is at most half the size of the optimized PNG. Photos qualify; screenshots, drawings and text stay PNG. The same applies to BMPs and to the still frame of an animated WebP. |
+| A **BMP** | Saved as PNG (or JPEG under the conversion rule), never copied as a BMP. |
+| An **animated WebP** | A still WebP of the first frame (or the format you chose). Not counted in the space saved. |
 | **Save as JPEG** on an image with transparency | Skipped with a clear reason, never silently flattened onto a background. |
 
 Pictures are always turned upright according to their EXIF orientation, and the copy is marked
@@ -77,9 +84,9 @@ See [BUILD.md](BUILD.md). In short: .NET 10 SDK, `dotnet build`, `dotnet test`,
 
 ```
 src/ParadisResize.Core/    the engine: no WPF, tested on any OS against the real libvips
-  Imaging/                 header reading (format from content, not extension), WebP lossless detection
+  Imaging/                 header reading (format from content, not extension), WebP inspection, BMP decoder
   Planning/                settings, new-size maths, output folders and never-overwrite naming
-  Scanning/                files/folders → image list, skipping the app's own output folders
+  Scanning/                files/folders → image list (by extension, or by contents), ignored-file reasons
   Processing/              the resize/optimize pipeline, encoder choices, the batch runner
   Util/                    friendly errors, path safety, units
 src/ParadisResize/         the WPF app: window, list, summary, About, settings, log

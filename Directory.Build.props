@@ -10,7 +10,7 @@
          window, About and the log, the exe's Product version, and the release folder/ZIP names
          (packaging/package-windows.sh reads it with `dotnet msbuild -getProperty:Version`);
          AssemblyVersion and FileVersion (the exe's File version) are VersionPrefix + ".0". -->
-    <VersionPrefix>1.0.0</VersionPrefix>
+    <VersionPrefix>1.0.1</VersionPrefix>
     <VersionSuffix></VersionSuffix>
     <Version Condition="'$(VersionSuffix)' == ''">$(VersionPrefix)</Version>
     <Version Condition="'$(VersionSuffix)' != ''">$(VersionPrefix)-$(VersionSuffix)</Version>

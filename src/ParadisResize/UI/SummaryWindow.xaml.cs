@@ -46,12 +46,18 @@ public partial class SummaryWindow : Window
             ProblemsText.Visibility = Visibility.Visible;
         }
 
+        var recovered = new List<string>();
         if (summary.RecoveredFromGif > 0)
+            recovered.Add(summary.RecoveredFromGif == 1
+                ? "1 file was really a GIF with the wrong name. A still image was recovered from its first frame; any animation was not kept."
+                : $"{summary.RecoveredFromGif:N0} files were really GIFs with the wrong name. A still image was recovered from each one's first frame; any animation was not kept.");
+        if (summary.RecoveredFromAnimatedWebP > 0)
+            recovered.Add(summary.RecoveredFromAnimatedWebP == 1
+                ? "1 animated WebP: a still image was recovered from its first frame; the animation was not kept."
+                : $"{summary.RecoveredFromAnimatedWebP:N0} animated WebPs: a still image was recovered from each one's first frame; the animation was not kept.");
+        if (recovered.Count > 0)
         {
-            GifText.Text = (summary.RecoveredFromGif == 1
-                    ? "1 file was really a GIF with the wrong name. A still image was recovered from its first frame; any animation was not kept."
-                    : $"{summary.RecoveredFromGif:N0} files were really GIFs with the wrong name. A still image was recovered from each one's first frame; any animation was not kept.")
-                + " These aren't included in the sizes above.";
+            GifText.Text = string.Join(" ", recovered) + " Recovered still images aren't included in the sizes above.";
             GifText.Visibility = Visibility.Visible;
         }
 

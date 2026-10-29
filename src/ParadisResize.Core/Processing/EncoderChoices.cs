@@ -29,6 +29,16 @@ public static class EncoderChoices
     public const int WebPEffort = 4;
 
     /// <summary>
+    /// AVIF quality 60 (libvips' 1–100 scale; its default is 50). Only used to keep an AVIF original as AVIF:
+    /// AVIF is never chosen for anything else. 60 keeps photos free of visible smoothing while staying well
+    /// below the size of a JPEG; an AVIF that was already saved smaller is copied unchanged by Optimize.
+    /// </summary>
+    public const int AvifQuality = 60;
+
+    /// <summary>Effort 4 of 0–9 for AVIF (libvips' default). A 12-megapixel photo takes about 5 s on 4 cores.</summary>
+    public const int AvifEffort = 4;
+
+    /// <summary>
     /// zlib level for PNG (0–9). PNG is always lossless, so this only trades time for size.
     /// See <see cref="PngFilterAdaptive"/>.
     /// </summary>

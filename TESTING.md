@@ -3,7 +3,7 @@
 ## Automated (any OS)
 
 ```
-dotnet test                                   # 64 tests, about 5 seconds
+dotnet test                                   # 112 tests, about 10 seconds
 PARADIS_LARGE_TESTS=1 dotnet test --filter "FullyQualifiedName~LargeImageTests" --logger "console;verbosity=detailed"
 ```
 
@@ -25,7 +25,7 @@ What they cover:
 - **Conversion.** Photo-like PNG → JPEG; screenshot-like PNG stays PNG; a PNG with any transparent
   pixel stays PNG with alpha; manual JPEG on a transparent PNG is skipped, never flattened.
 - **Failures.** Truncated PNG and a JPEG with scrambled data ("Damaged or incomplete"), a text file
-  named `.png` and a JPEG with an overwritten start ("Couldn't read image"), a BMP named `.jpg`
+  named `.png` and a JPEG with an overwritten start ("Couldn't read image"), a TIFF named `.jpg`
   ("Not a supported image"), a missing file, an image too wide for WebP; a bad image in the
   middle of a batch doesn't stop it; cancel keeps finished files and counts the rest.
 - **GIFs with the wrong name.** An animated GIF named `.jpg` gives a PNG of its first frame only
@@ -34,6 +34,28 @@ What they cover:
   transparency even with conversion allowed, and Save as JPEG skips it; a damaged GIF fails cleanly;
   the batch counts recovered GIFs and leaves them out of the space saved; real `.gif` files are not
   picked up.
+- **Animated WebP (v1.0.1).** Detected with its frame count and the first frame's lossless/lossy
+  storage; a still WebP isn't mistaken for one. Resize gives a single-frame WebP of the first frame
+  only (pixel-checked), original bytes and time unchanged; transparency kept; same size still makes a
+  copy; Optimize never copies it unchanged; with conversion an opaque photo frame becomes JPEG, a
+  transparent one stays WebP; Save as PNG respected; a damaged one fails cleanly; the batch counts it
+  separately and leaves it (and GIFs) out of the space saved; it is picked up by folder scans.
+- **BMP (v1.0.1).** 1, 4, 8, 16, 24 and 32-bit, bottom-up and top-down, RLE8, v5 header with alpha:
+  decoded exactly (quadrant colours checked) and saved as PNG ("Done (BMP → PNG)"); 32-bit alpha
+  kept, all-zero 4th byte treated as opaque; resize; small BMP still converted, not copied; photo
+  BMP → JPEG with conversion; Save as WebP; truncated BMP and a header claiming 60000 × 60000 in a
+  tiny file fail as damaged without allocating; embedded-JPEG BMP not supported; a BMP named `.jpg`
+  is processed as BMP; garbage named `.bmp` is unreadable. (Also checked by hand against 16 BMPs
+  written by ImageMagick and Pillow: identical pixels.)
+- **AVIF (v1.0.1).** Detected; resize keeps AVIF and transparency; an already compact AVIF is copied
+  unchanged by Optimize; Save as JPEG/PNG; a HEIC named `.avif` is not supported; a truncated AVIF
+  fails cleanly.
+- **Wrong extensions and the log (v1.0.1).** In a mixed folder, a JPEG named `.tiff`, a PNG named
+  `.dat`, a WebP named `.bin` and a BMP named `.dib` are added by content; a real `.gif`, a GIF named
+  `.tiff`, a TIFF, an empty `.wdp`, a `.realm` database and a text file are ignored, each with its
+  reason, path and extension, and each gets its own log line (as do leftover `.partial` files); the
+  JPEG named `.tiff` becomes `Holiday.jpg` (also when copied unchanged) with the original untouched;
+  a batch with blank, zero-filled and fake files carries on to the end.
 - **Scanning.** Subfolders off by default; `Resized`/`Optimized` folders and the custom output folder
   are never scanned; partial files ignored; duplicates not added twice; a folder dropped directly is
   scanned even if it is called `Resized`.
@@ -56,6 +78,8 @@ doesn't match their extension, missing and corrupt files failing without stoppin
 cancel mid-batch (finished copies intact, the rest reported as not processed, originals untouched),
 and still images recovered from animated GIFs named `.jpg`.
 
+**v1.0.1: to do.** Items 12–16 below are new.
+
 Checklist for each release:
 
 1. Unzip, run `ParadisResize.exe`; the dark window shows the drop area.
@@ -73,3 +97,14 @@ Checklist for each release:
 11. An animated GIF renamed `.jpg`: the list shows GIF and "Ready (GIF, still image only)", the
     tooltip mentions the frames; after processing "Done (GIF → PNG)", the copy is a still PNG of the
     first frame, and the summary says a still was recovered.
+12. An animated WebP: the list shows "WebP (animated)" and "Ready (animated, first frame only)";
+    after processing "Done (animated → still WebP)", the copy is a still image (open it in Photos),
+    the row shows "–" for saved, and the summary has a line about recovered animated images.
+13. A BMP (24-bit from Paint, and a 32-bit one with transparency if available): "Done (BMP → PNG)",
+    colours and orientation correct, transparency kept.
+14. An AVIF photo: Resize keeps it AVIF; Optimize usually says "Already efficient".
+15. A JPEG renamed `.tiff` inside a folder: it is added, the copy is `.jpg`, the original keeps its
+    name. A `.gif` in the same folder is not added.
+16. After adding a folder with other files in it, the log lists each ignored file with its path,
+    extension and reason.
+

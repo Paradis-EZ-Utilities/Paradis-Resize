@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.0.1 (unreleased)
+
+A compatibility and reliability update from testing on about 54,000 real images. Everything else
+works as in 1.0.0.
+
+- **Animated WebP:** no longer refused. A still image is recovered from the first frame (kept as WebP,
+  lossless if the frame was; transparency kept; conversion to JPEG under the usual rule). Animation is
+  not kept, the original is untouched, and these files are counted separately in the summary and
+  left out of the space saved, like recovered GIFs.
+- **BMP input:** `.bmp` files are added and processed (1/4/8-bit, RLE, 16/24/32-bit, transparency).
+  Copies are PNG ("Done (BMP → PNG)"), or JPEG under the conversion rule. BMP is never written.
+- **AVIF input:** `.avif` files are added and processed with the libvips already bundled (no new
+  files). AVIF stays AVIF unless another format is chosen; transparency is kept. HEIC is still not
+  supported.
+- **Wrong extensions:** a file with an unlisted extension whose first bytes show a PNG, JPEG, WebP,
+  BMP or AVIF (for example a JPEG named `.tiff`) is added and processed as what it is; the copy gets
+  the right extension and the log says the extension didn't match. GIF contents are never added this
+  way, so `.gif` files stay out of scans and keep their animation.
+- **Log:** every ignored file is now listed with its full path, extension and reason, as well as the
+  total.
+- A damaged animated WebP or AVIF is reported as "Damaged or incomplete" rather than "Something went
+  wrong".
+
 ## 1.0.0 (2026-10-28)
 
 First release.

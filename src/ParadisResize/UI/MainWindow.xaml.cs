@@ -152,15 +152,17 @@ public partial class MainWindow : Window
         }
 
         Log.Info($"Added {added} image(s); {scanner.SkippedNotImages} other file(s) ignored" +
+                 (scanner.FoundByContent.Count > 0 ? $"; {scanner.FoundByContent.Count} added by their contents (extension doesn't match)" : "") +
                  (scanner.SkippedOutputFolders.Count > 0 ? $"; skipped output folder(s): {string.Join(" | ", scanner.SkippedOutputFolders)}" : ""));
+        scanner.LogDetails(Log.Info);
         if (added == 0)
         {
             Dialogs.Info(this, "No images found",
                 scanner.SkippedNotImages > 0
-                    ? "None of those files are PNG, JPEG or WebP images."
+                    ? $"None of those files are {SupportedFormats.ReadableNames} images. The log lists each file and why it was left out."
                     : subfolders || paths.All(File.Exists)
-                        ? "No new PNG, JPEG or WebP images were found there."
-                        : "No new PNG, JPEG or WebP images were found in that folder. To include the folders inside it, tick \"Include subfolders\" and add it again.");
+                        ? $"No new {SupportedFormats.ReadableNames} images were found there."
+                        : $"No new {SupportedFormats.ReadableNames} images were found in that folder. To include the folders inside it, tick \"Include subfolders\" and add it again.");
         }
     }
 
@@ -550,7 +552,7 @@ public partial class MainWindow : Window
                 if (p.Result.Saved)
                 {
                     done++;
-                    if (p.Result.Source is { IsGif: false } source) savedBytes += source.FileSize - p.Result.OutputSize;
+                    if (p.Result.Source is { IsFrameRecovery: false } source) savedBytes += source.FileSize - p.Result.OutputSize;
                 }
                 else if (p.Result.Outcome is ItemOutcome.Failed or ItemOutcome.Skipped) failed++;
             }

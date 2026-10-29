@@ -402,14 +402,22 @@ public class ProcessingTests
     }
 
     [Fact]
-    public void BmpRenamedToJpg_IsNotSupported()
+    public void TiffRenamedToJpg_IsNotSupported()
     {
         using var t = new TempDir();
-        byte[] bmp = new byte[64];
-        "BM"u8.CopyTo(bmp);
-        File.WriteAllBytes(t.File("scan.jpg"), bmp);
+        using (var img = Fixtures.Photo(40, 30)) img.Tiffsave(t.File("scan.jpg"));
         var r = Run(Resize50, t.File("scan.jpg"));
         Assert.Equal("Not a supported image", r.Status);
+    }
+
+    [Fact]
+    public void BmpRenamedToJpg_IsProcessedAsBmp()
+    {
+        using var t = new TempDir();
+        Fixtures.SaveBmp(t.File("scan.jpg"), 40, 30, 24, (x, y) => (10, 20, 30, 255));
+        var r = Run(Resize50, t.File("scan.jpg"));
+        Assert.Equal("Done (BMP → PNG)", r.Status);
+        Assert.EndsWith("scan.png", r.OutputPath);
     }
 
     [Fact]
