@@ -2,7 +2,7 @@
 <assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
   <!-- Side-by-side identity only (Windows requires four numbers here); it is not shown anywhere.
        The product version is defined once, in Directory.Build.props. -->
-  <assemblyIdentity version="1.0.0.0" name="DYParadis.ParadisResize"/>
+  <assemblyIdentity version="1.0.1.0" name="DYParadis.ParadisResize"/>
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
     <security>
       <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">

@@ -27,9 +27,12 @@ public sealed record BatchSummary
     /// <summary>Still images recovered from GIFs with a PNG/JPEG/WebP name (included in <see cref="Done"/>).</summary>
     public int RecoveredFromGif { get; init; }
 
+    /// <summary>Still images recovered from the first frame of animated WebPs (included in <see cref="Done"/>).</summary>
+    public int RecoveredFromAnimatedWebP { get; init; }
+
     /// <summary>
     /// Sizes of the images that were saved (processed or copied), before and after. Images recovered from
-    /// GIFs aren't counted: dropping an animation's other frames isn't a saving to report.
+    /// GIFs or animated WebPs aren't counted: dropping an animation's other frames isn't a saving to report.
     /// </summary>
     public long OriginalBytes { get; init; }
     public long NewBytes { get; init; }
@@ -65,7 +68,7 @@ public sealed class BatchRunner
         var planner = new OutputPlanner(_settings.Mode, _settings.CustomOutputFolder);
         var processor = new ImageProcessor(_settings, planner);
         var folders = new List<string>();
-        int done = 0, copied = 0, skipped = 0, failed = 0, notProcessed = 0, fromGif = 0;
+        int done = 0, copied = 0, skipped = 0, failed = 0, notProcessed = 0, fromGif = 0, fromWebP = 0;
         long originalBytes = 0, newBytes = 0;
         bool cancelled = false;
 
@@ -107,9 +110,10 @@ public sealed class BatchRunner
                 case ItemOutcome.Cancelled: cancelled = true; notProcessed++; break;
             }
             if (result.Saved && result.Source is { IsGif: true }) fromGif++;
+            if (result.Saved && result.Source is { IsAnimatedWebP: true }) fromWebP++;
             if (result.Saved && result.Source != null)
             {
-                if (!result.Source.IsGif)
+                if (!result.Source.IsFrameRecovery)
                 {
                     originalBytes += result.Source.FileSize;
                     newBytes += result.OutputSize;
@@ -137,6 +141,7 @@ public sealed class BatchRunner
             Failed = failed,
             NotProcessed = notProcessed,
             RecoveredFromGif = fromGif,
+            RecoveredFromAnimatedWebP = fromWebP,
             Cancelled = cancelled,
             OriginalBytes = originalBytes,
             NewBytes = newBytes,
@@ -144,8 +149,9 @@ public sealed class BatchRunner
             Elapsed = sw.Elapsed,
         };
         CoreLog.Info($"Batch {(cancelled ? "cancelled" : "finished")} in {Units.FormatDuration(summary.Elapsed)}: " +
-                     $"{done} processed ({fromGif} recovered from GIF), {copied} copied unchanged, {skipped} skipped, {failed} failed, {notProcessed} not processed; " +
-                     $"{originalBytes:N0} -> {newBytes:N0} bytes ({Units.PercentSaved(originalBytes, newBytes)}% smaller)");
+                     $"{done} processed ({fromGif} recovered from GIF, {fromWebP} from animated WebP), {copied} copied unchanged, {skipped} skipped, {failed} failed, {notProcessed} not processed; " +
+                     $"{originalBytes:N0} -> {newBytes:N0} bytes ({Units.PercentSaved(originalBytes, newBytes)}% smaller" +
+                     $"{(fromGif + fromWebP > 0 ? "; recovered still images not included" : "")})");
         return summary;
     }
 

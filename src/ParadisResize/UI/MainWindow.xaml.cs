@@ -152,15 +152,17 @@ public partial class MainWindow : Window
         }
 
         Log.Info($"Added {added} image(s); {scanner.SkippedNotImages} other file(s) ignored" +
+                 (scanner.FoundByContent.Count > 0 ? $"; {scanner.FoundByContent.Count} added by their contents (extension doesn't match)" : "") +
                  (scanner.SkippedOutputFolders.Count > 0 ? $"; skipped output folder(s): {string.Join(" | ", scanner.SkippedOutputFolders)}" : ""));
+        scanner.LogDetails(Log.Info);
         if (added == 0)
         {
             Dialogs.Info(this, "No images found",
                 scanner.SkippedNotImages > 0
-                    ? "None of those files are PNG, JPEG or WebP images."
+                    ? $"None of those files are {SupportedFormats.ReadableNames} images. The log lists each file and why it was left out."
                     : subfolders || paths.All(File.Exists)
-                        ? "No new PNG, JPEG or WebP images were found there."
-                        : "No new PNG, JPEG or WebP images were found in that folder. To include the folders inside it, tick \"Include subfolders\" and add it again.");
+                        ? $"No new {SupportedFormats.ReadableNames} images were found there."
+                        : $"No new {SupportedFormats.ReadableNames} images were found in that folder. To include the folders inside it, tick \"Include subfolders\" and add it again.");
         }
     }
 
@@ -240,8 +242,12 @@ public partial class MainWindow : Window
         int count = _items.Count;
         long bytes = _items.Sum(i => i.Info?.FileSize ?? 0);
         int unreadable = _items.Count(i => i.State == QueueState.Unreadable);
+        // Sizes arrive as each header is read in the background; until every image has one, the sum is
+        // only part of the total, so it isn't shown as if it were final.
+        bool sizing = _scansRunning > 0 || _items.Any(i => i.Info == null && i.State != QueueState.Unreadable);
         string text = count == 1 ? "1 image" : $"{count:N0} images";
-        if (bytes > 0) text += $" · {Units.FormatSize(bytes)}";
+        if (count > 0 && sizing) text += " · Calculating size…";
+        else if (bytes > 0) text += $" · {Units.FormatSize(bytes)}";
         if (unreadable > 0) text += $" · {unreadable} can't be read";
         if (_scansRunning > 0) text += " · adding…";
         QueueSummaryText.Text = text;
@@ -550,7 +556,7 @@ public partial class MainWindow : Window
                 if (p.Result.Saved)
                 {
                     done++;
-                    if (p.Result.Source is { IsGif: false } source) savedBytes += source.FileSize - p.Result.OutputSize;
+                    if (p.Result.Source is { IsFrameRecovery: false } source) savedBytes += source.FileSize - p.Result.OutputSize;
                 }
                 else if (p.Result.Outcome is ItemOutcome.Failed or ItemOutcome.Skipped) failed++;
             }
@@ -586,7 +592,7 @@ public partial class MainWindow : Window
             Close();
             return;
         }
-        if (summary != null) new SummaryWindow(summary, job.Mode) { Owner = this }.ShowDialog();
+        if (summary != null) new SummaryWindow(summary, job.Mode, job.CustomOutputFolder) { Owner = this }.ShowDialog();
     }
 
     private void OnCancel(object sender, RoutedEventArgs e)

@@ -23,7 +23,7 @@ namespace ParadisResize.Core.Processing;
 /// </summary>
 public sealed class ImageProcessor
 {
-    private enum Encoding { PngLossless, Jpeg, WebPLossy, WebPLossless }
+    private enum Encoding { PngLossless, Jpeg, WebPLossy, WebPLossless, Avif }
 
     private sealed record Candidate(string Path, long Size, Encoding Encoding);
 
@@ -107,13 +107,16 @@ public sealed class ImageProcessor
         };
         if (manual == info.Format) manual = null; // "PNG" chosen for a PNG is the same as Keep Original
         ImageFormat target = manual ?? info.Format;
-        bool tryJpeg = optimize && manual == null && _settings.AllowFormatConversion && info.Format == ImageFormat.Png;
+        // The JPEG try is for PNGs (including GIF frames and BMPs, handled as PNGs) and for the still frame of
+        // an animated WebP: the cases where a photo may be stored losslessly.
+        bool tryJpeg = optimize && manual == null && _settings.AllowFormatConversion
+                       && (info.Format == ImageFormat.Png || info.IsAnimatedWebP);
 
         // ---- Transparency ----
         // An alpha channel that is 100% opaque everywhere (common in PNGs from some programs) holds no
         // information, so it can be dropped: a smaller PNG, and a PNG that may become a JPEG.
         bool needAlphaCheck = info.HasAlphaChannel && (target == ImageFormat.Jpeg || tryJpeg || optimize && target == ImageFormat.Png);
-        bool opaque = !info.HasAlphaChannel || needAlphaCheck && AlphaIsOpaque(info.Path, ct);
+        bool opaque = !info.HasAlphaChannel || needAlphaCheck && AlphaIsOpaque(info, ct);
         if (info.HasAlphaChannel && needAlphaCheck)
             CoreLog.Info(opaque ? "  Alpha channel is fully opaque: it will be dropped (no visible change)"
                                 : "  Has transparent areas: transparency will be kept");
@@ -149,22 +152,32 @@ public sealed class ImageProcessor
         bool dropAlpha = info.HasAlphaChannel && opaque;
         bool sameSize = size.IsSameAs(info.Width, info.Height);
 
-        // ---- Resize ----
-        // A GIF is never copied unchanged: the copy would still be a GIF (and still animated) with the wrong name.
+        // ---- Notes for the log ----
+        // A GIF, an animated WebP or a BMP is never copied unchanged: the copy would still be a GIF, an
+        // animation or a BMP (see ImageInfo.MustReencode).
         if (info.IsGif)
             CoreLog.Info($"  Recovering the first of {info.FrameCount} GIF frame(s) as a still image; animation is not kept");
+        if (info.IsAnimatedWebP)
+            CoreLog.Info($"  Animated WebP: recovering the first of {info.FrameCount} frames as a still image; animation is not kept");
+        if (info.IsBmp && manual == null)
+            CoreLog.Info("  BMP isn't saved by Paradis Resize: the copy will be a PNG (or a JPEG if conversion is allowed and worthwhile)");
+        if (info.HasForeignExtension)
+            CoreLog.Info($"  Extension does not match the contents: named {Path.GetExtension(info.Path)} but the file is really {info.SourceFormatName}. " +
+                         $"Processing it as {info.SourceFormatName}; the original keeps its name");
+
+        // ---- Resize ----
 
         if (!optimize)
         {
             CoreLog.Info($"  Plan: {info.Width}x{info.Height} -> {size.Width}x{size.Height} as {Describe(targetEncoding)}");
-            if (sameSize && manual == null && info.Orientation == 1 && !info.IsGif)
+            if (sameSize && manual == null && info.Orientation == 1 && !info.MustReencode)
             {
                 string why = _settings.Resize.DontEnlarge ? "Already this size or smaller" : "Already this size";
                 return CopyOriginal(info, folder, stem, jobId, temps, setFinal, why,
                     $"{why}, so the original was copied unchanged (not enlarged or re-saved).");
             }
             var c = Encode(info, size, targetEncoding, dropAlpha, folder, stem, jobId, temps, progress, 0, 1, ct);
-            return Finish(info, c, size, folder, stem, temps, setFinal, converted: manual != null || info.IsGif,
+            return Finish(info, c, size, folder, stem, temps, setFinal, converted: manual != null || info.IsGif || info.IsBmp,
                 note: c.Size > info.FileSize ? "The new file is larger than the original." : null);
         }
 
@@ -179,7 +192,7 @@ public sealed class ImageProcessor
         {
             var jpeg = Encode(info, size, Encoding.Jpeg, dropAlpha: true, folder, stem, jobId, temps, progress, share, 1 - share, ct);
             double ratio = jpeg.Size / (double)Math.Max(1, primary.Size);
-            CoreLog.Info($"  JPEG: {jpeg.Size:N0} bytes ({ratio:P0} of the PNG)");
+            CoreLog.Info($"  JPEG: {jpeg.Size:N0} bytes ({ratio:P0} of the {SupportedFormats.DisplayName(FormatOf(primary.Encoding))})");
             if (ratio <= EncoderChoices.ConversionMaxRatio)
             {
                 chosen = jpeg;
@@ -187,12 +200,12 @@ public sealed class ImageProcessor
             }
             else
             {
-                CoreLog.Info("  Keeping PNG: JPEG wouldn't be much smaller (likely a screenshot, drawing or text)");
+                CoreLog.Info($"  Keeping {SupportedFormats.DisplayName(FormatOf(primary.Encoding))}: JPEG wouldn't be much smaller (likely a screenshot, drawing or text)");
             }
         }
 
-        bool converted = manual != null || info.IsGif || chosen.Encoding == Encoding.Jpeg && info.Format != ImageFormat.Jpeg;
-        if (manual == null && !info.IsGif)
+        bool converted = manual != null || info.IsGif || info.IsBmp || chosen.Encoding == Encoding.Jpeg && info.Format != ImageFormat.Jpeg;
+        if (manual == null && !info.MustReencode)
         {
             // Keep only a worthwhile saving; otherwise the original is the better file.
             double minSaving = chosen.Encoding is Encoding.PngLossless or Encoding.WebPLossless && !converted
@@ -216,15 +229,18 @@ public sealed class ImageProcessor
     {
         ImageFormat.Png => Encoding.PngLossless,
         ImageFormat.Jpeg => Encoding.Jpeg,
-        // A lossless WebP (usually a graphic) stays lossless, as does a GIF frame (at most 256 colours, so
-        // lossless is exact and small); anything else saved as WebP is a high-quality lossy WebP.
-        _ => info.Format == ImageFormat.WebP && info.IsLosslessWebP || info.IsGif ? Encoding.WebPLossless : Encoding.WebPLossy,
+        ImageFormat.Avif => Encoding.Avif,
+        // A lossless WebP (usually a graphic, or an animation's lossless first frame) stays lossless, as does a
+        // GIF frame (at most 256 colours, so lossless is exact and small); anything else saved as WebP is a
+        // high-quality lossy WebP.
+        _ => info.Source == SourceKind.WebP && info.IsLosslessWebP || info.IsGif ? Encoding.WebPLossless : Encoding.WebPLossy,
     };
 
     private static ImageFormat FormatOf(Encoding e) => e switch
     {
         Encoding.PngLossless => ImageFormat.Png,
         Encoding.Jpeg => ImageFormat.Jpeg,
+        Encoding.Avif => ImageFormat.Avif,
         _ => ImageFormat.WebP,
     };
 
@@ -233,6 +249,7 @@ public sealed class ImageProcessor
         Encoding.PngLossless => $"PNG (lossless, zlib {EncoderChoices.PngCompression}, adaptive filter)",
         Encoding.Jpeg => $"JPEG (quality {EncoderChoices.JpegQuality})",
         Encoding.WebPLossy => $"WebP (quality {EncoderChoices.WebPQuality})",
+        Encoding.Avif => $"AVIF (quality {EncoderChoices.AvifQuality})",
         _ => "WebP (lossless)",
     };
 
@@ -240,12 +257,12 @@ public sealed class ImageProcessor
     /// Decodes the image once, in strips, and checks whether its alpha channel is fully opaque.
     /// Costs one pass over the file but almost no memory.
     /// </summary>
-    private static bool AlphaIsOpaque(string path, CancellationToken ct)
+    private static bool AlphaIsOpaque(ImageInfo info, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
         try
         {
-            using var img = Image.NewFromFile(path, access: Enums.Access.Sequential, failOn: Enums.FailOn.Error);
+            using var img = Open(info);
             using var alpha = img.ExtractBand(img.Bands - 1);
             double max = img.Format == Enums.BandFormat.Ushort ? 65535 : 255;
             alpha.SetProgress(new Progress<int>(_ => { }), ct);
@@ -260,6 +277,11 @@ public sealed class ImageProcessor
             throw FriendlyErrors.Classify(ex, FriendlyErrors.Stage.Reading);
         }
     }
+
+    /// <summary>Opens the original for one sequential pass (BMPs are decoded by <see cref="BmpDecoder"/>).</summary>
+    private static Image Open(ImageInfo info) => info.IsBmp
+        ? BmpDecoder.Load(info.Path)
+        : Image.NewFromFile(info.Path, access: Enums.Access.Sequential, failOn: Enums.FailOn.Error);
 
     /// <summary>Resizes (if needed), turns upright, and saves to a temporary file in the output folder.</summary>
     private static Candidate Encode(ImageInfo info, SizePlanner.Plan size, Encoding encoding, bool dropAlpha,
@@ -282,8 +304,18 @@ public sealed class ImageProcessor
             // (JPEG, WebP), streams PNG in strips, applies EXIF orientation (and resets it to 1), converts CMYK
             // to sRGB, and handles transparency correctly while resampling. With the original size it doesn't
             // resample at all. failOn: Error makes a damaged file fail instead of producing a grey-filled copy.
-            pipeline = Image.Thumbnail(info.Path, size.Width, height: size.Height, size: Enums.Size.Force,
-                failOn: Enums.FailOn.Error);
+            // Only the first frame of a GIF or an animated WebP is loaded (libvips' default, page 0).
+            // A BMP is decoded by BmpDecoder and then goes through the same thumbnail step.
+            if (info.IsBmp)
+            {
+                using var decoded = BmpDecoder.Load(info.Path);
+                pipeline = decoded.ThumbnailImage(size.Width, height: size.Height, size: Enums.Size.Force);
+            }
+            else
+            {
+                pipeline = Image.Thumbnail(info.Path, size.Width, height: size.Height, size: Enums.Size.Force,
+                    failOn: Enums.FailOn.Error);
+            }
         }
         catch (Exception ex)
         {
@@ -329,6 +361,10 @@ public sealed class ImageProcessor
                 case Encoding.WebPLossless:
                     img.Webpsave(temp, lossless: true, effort: EncoderChoices.WebPEffort, keep: Enums.ForeignKeep.All);
                     break;
+                case Encoding.Avif:
+                    img.Heifsave(temp, q: EncoderChoices.AvifQuality, bitdepth: 8, compression: Enums.ForeignHeifCompression.Av1,
+                        effort: EncoderChoices.AvifEffort, keep: Enums.ForeignKeep.All);
+                    break;
             }
         }
         catch (Exception ex) when (ct.IsCancellationRequested)
@@ -366,10 +402,14 @@ public sealed class ImageProcessor
             {
                 Encoding.PngLossless => "png",
                 Encoding.Jpeg => "jpeg",
+                Encoding.Avif => "heif",
                 _ => "webp",
             };
             if (!loader.StartsWith(expected, StringComparison.Ordinal) || check.Width != size.Width || check.Height != size.Height)
                 throw new InvalidDataException($"Saved file check failed: {loader} {check.Width}x{check.Height}, expected {expected} {size.Width}x{size.Height}");
+            // A copy is always a single still image, even when the original was an animation.
+            if (check.Contains("n-pages") && check.Get("n-pages") is int pages && pages > 1)
+                throw new InvalidDataException($"Saved file check failed: {pages} frames, expected a still image");
         }
         catch (Exception ex) when (ex is not ImageJobException)
         {
@@ -384,23 +424,40 @@ public sealed class ImageProcessor
         var format = FormatOf(chosen.Encoding);
         string final = MoveIntoPlace(info, chosen.Path, folder, stem, SupportedFormats.ExtensionFor(info.Path, format), setFinal);
         temps.Remove(chosen.Path);
-        CoreLog.Info($"  Saved {final} ({chosen.Size:N0} bytes, {Units.PercentSaved(info.FileSize, chosen.Size)}% smaller" +
+        CoreLog.Info($"  Saved {final} ({chosen.Size:N0} bytes, " +
+                     (info.IsFrameRecovery ? "first frame only, not counted as a saving" : $"{Units.PercentSaved(info.FileSize, chosen.Size)}% smaller") +
                      $"{(converted ? $", converted {info.SourceFormatName} -> {SupportedFormats.DisplayName(format)}" : "")})");
-        string? message = note;
+        string fmt = SupportedFormats.DisplayName(format);
+        var messages = new List<string>();
+        string status = converted ? $"Done (now {fmt})" : "Done";
         if (info.IsGif)
         {
             // Animated GIFs shrink hugely just by losing their other frames, so the size comparison isn't one.
-            message = (info.FrameCount > 1
-                ? $"Recovered from GIF: this file is really an animated GIF ({info.FrameCount:N0} frames). Only the first frame was saved, as a still {SupportedFormats.DisplayName(format)} image; the animation was not kept."
-                : $"Recovered from GIF: this file is really a GIF. It was saved as a still {SupportedFormats.DisplayName(format)} image.")
-                + " The original is untouched.";
+            status = $"Done (GIF → {fmt})";
+            messages.Add(info.FrameCount > 1
+                ? $"Recovered from GIF: this file is really an animated GIF ({info.FrameCount:N0} frames). Only the first frame was saved, as a still {fmt} image; the animation was not kept."
+                : $"Recovered from GIF: this file is really a GIF. It was saved as a still {fmt} image.");
         }
+        else if (info.IsAnimatedWebP)
+        {
+            // As for GIFs: dropping an animation's other frames isn't a saving, so it isn't reported as one.
+            status = $"Done (animated → still {fmt})";
+            messages.Add($"Recovered from animated WebP: this file is an animated WebP ({info.FrameCount:N0} frames). Only the first frame was saved, as a still {fmt} image; the animation was not kept.");
+        }
+        else if (info.IsBmp)
+        {
+            status = $"Done (BMP → {fmt})";
+            messages.Add($"Converted from BMP: Paradis Resize doesn't save BMP files, so the copy is a {fmt} image.");
+        }
+        if (info.HasForeignExtension)
+            messages.Add($"This file is named {Path.GetExtension(info.Path)} but is really a {info.SourceFormatName} image, so it was processed as {info.SourceFormatName}. The copy is named {Path.GetExtension(final)}.");
+        if (note != null) messages.Add(note);
+        if (info.MustReencode || info.HasForeignExtension) messages.Add("The original is untouched.");
         return new ItemResult
         {
             Outcome = ItemOutcome.Done,
-            Status = info.IsGif ? $"Done (GIF → {SupportedFormats.DisplayName(format)})"
-                : converted ? $"Done (now {SupportedFormats.DisplayName(format)})" : "Done",
-            Message = message,
+            Status = status,
+            Message = messages.Count > 0 ? string.Join(" ", messages) : null,
             OutputPath = final,
             OutputSize = chosen.Size,
             OutputWidth = size.Width,
@@ -413,7 +470,11 @@ public sealed class ImageProcessor
     private ItemResult CopyOriginal(ImageInfo info, string folder, string stem, string jobId, List<string> temps,
                                     Action<string> setFinal, string status, string message)
     {
-        string ext = Path.GetExtension(info.Path);
+        // A file found by its contents (a JPEG named ".tiff") gets the extension that matches them; the
+        // original keeps its name. Otherwise the copy keeps the original's extension, as always.
+        string ext = info.HasForeignExtension ? SupportedFormats.Extension(info.Format) : Path.GetExtension(info.Path);
+        if (info.HasForeignExtension)
+            message += $" It is named {Path.GetExtension(info.Path)} but is really a {info.SourceFormatName} image, so the copy is named {ext}.";
         string temp = Path.Combine(folder, $"{TruncateStem(stem)}.{jobId}-copy{ext}{FileNaming.TemporarySuffix}");
         temps.Add(temp);
         try

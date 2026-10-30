@@ -56,8 +56,8 @@ public sealed class QueueItem : INotifyPropertyChanged
         }
     }
 
-    public string FormatText => Info != null ? Info.SourceFormatName
-        : (SupportedFormats.FromExtension(Path) is ImageFormat f ? SupportedFormats.DisplayName(f) : "");
+    public string FormatText => Info != null ? (Info.IsAnimatedWebP ? "WebP (animated)" : Info.SourceFormatName)
+        : (SupportedFormats.KindFromExtension(Path) is SourceKind k ? SupportedFormats.DisplayName(k) : "");
 
     public string DimensionsText
     {
@@ -90,8 +90,8 @@ public sealed class QueueItem : INotifyPropertyChanged
         get
         {
             if (Info == null || Result is not { Saved: true } r) return "";
-            // A still recovered from a GIF isn't a saving: an animation's other frames were simply left out.
-            if (r.Outcome == ItemOutcome.CopiedUnchanged || Info.IsGif) return "–";
+            // A still recovered from a GIF or an animated WebP isn't a saving: an animation's other frames were simply left out.
+            if (r.Outcome == ItemOutcome.CopiedUnchanged || Info.IsFrameRecovery) return "–";
             int pct = Units.PercentSaved(Info.FileSize, r.OutputSize);
             return pct >= 0 ? $"{pct}%" : $"+{-pct}% larger";
         }
@@ -100,7 +100,13 @@ public sealed class QueueItem : INotifyPropertyChanged
     public string StatusText => State switch
     {
         QueueState.Reading => "Reading…",
-        QueueState.Ready => Info is { IsGif: true } ? "Ready (GIF, still image only)" : "Ready",
+        QueueState.Ready => Info switch
+        {
+            { IsGif: true } => "Ready (GIF, still image only)",
+            { IsAnimatedWebP: true } => "Ready (animated, first frame only)",
+            { IsBmp: true } => "Ready (BMP, saved as PNG)",
+            _ => "Ready",
+        },
         QueueState.Unreadable => ReadError ?? "Can't read",
         QueueState.Waiting => "Waiting",
         QueueState.Working => Progress > 0.01 ? $"Working… {Progress:P0}" : "Working…",
@@ -128,6 +134,12 @@ public sealed class QueueItem : INotifyPropertyChanged
                 lines.Add(Info.FrameCount > 1
                     ? $"This file is really an animated GIF ({Info.FrameCount:N0} frames) with the wrong name. Only its first frame will be saved, as a still image; the animation won't be kept."
                     : "This file is really a GIF with the wrong name. It will be saved as a still image in a supported format.");
+            if (Info is { IsAnimatedWebP: true } && Result == null)
+                lines.Add($"This is an animated WebP ({Info.FrameCount:N0} frames). Only its first frame will be saved, as a still image; the animation won't be kept. The original is untouched.");
+            if (Info is { IsBmp: true } && Result == null)
+                lines.Add("Paradis Resize doesn't save BMP files, so the copy will be a PNG (or a JPEG, if conversion is allowed and it's a photo).");
+            if (Info is { HasForeignExtension: true } && Result == null)
+                lines.Add($"Named {System.IO.Path.GetExtension(Path)}, but the file is really a {Info.SourceFormatName} image. It will be processed as {Info.SourceFormatName}; the original keeps its name.");
             if (State == QueueState.Unreadable && ReadError != null) lines.Add(ReadErrorMessage ?? ReadError);
             if (Result?.Message != null) lines.Add(Result.Message);
             if (Result?.OutputPath != null) lines.Add($"Saved as: {Result.OutputPath}");

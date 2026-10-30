@@ -10,7 +10,11 @@ public partial class SummaryWindow : Window
 {
     private readonly BatchSummary _summary;
 
-    public SummaryWindow(BatchSummary summary, JobMode mode)
+    /// <summary>The folder Open Output Folder shows: the custom output folder, or the one output folder.</summary>
+    private readonly string? _openFolder;
+
+    /// <param name="customOutputFolder">The chosen output folder, or null for folders next to the originals.</param>
+    public SummaryWindow(BatchSummary summary, JobMode mode, string? customOutputFolder)
     {
         InitializeComponent();
         _summary = summary;
@@ -46,25 +50,41 @@ public partial class SummaryWindow : Window
             ProblemsText.Visibility = Visibility.Visible;
         }
 
+        var recovered = new List<string>();
         if (summary.RecoveredFromGif > 0)
+            recovered.Add(summary.RecoveredFromGif == 1
+                ? "1 file was really a GIF with the wrong name. A still image was recovered from its first frame; any animation was not kept."
+                : $"{summary.RecoveredFromGif:N0} files were really GIFs with the wrong name. A still image was recovered from each one's first frame; any animation was not kept.");
+        if (summary.RecoveredFromAnimatedWebP > 0)
+            recovered.Add(summary.RecoveredFromAnimatedWebP == 1
+                ? "1 animated WebP: a still image was recovered from its first frame; the animation was not kept."
+                : $"{summary.RecoveredFromAnimatedWebP:N0} animated WebPs: a still image was recovered from each one's first frame; the animation was not kept.");
+        if (recovered.Count > 0)
         {
-            GifText.Text = (summary.RecoveredFromGif == 1
-                    ? "1 file was really a GIF with the wrong name. A still image was recovered from its first frame; any animation was not kept."
-                    : $"{summary.RecoveredFromGif:N0} files were really GIFs with the wrong name. A still image was recovered from each one's first frame; any animation was not kept.")
-                + " These aren't included in the sizes above.";
+            GifText.Text = string.Join(" ", recovered) + " Recovered still images aren't included in the sizes above.";
             GifText.Visibility = Visibility.Visible;
         }
 
         // One output folder can be opened directly. Copies spread over a "Resized" folder in each source
         // folder can't be shown as one place, so the window says where they are instead.
+        // With a chosen output folder everything is under that one folder (subfolders mirror the originals'),
+        // so that folder is what's shown and opened.
         string folderName = mode == JobMode.Resize ? OutputPlanner.ResizedFolderName : OutputPlanner.OptimizedFolderName;
-        if (summary.OutputFolders.Count == 1)
+        if (summary.OutputFolders.Count > 0 && !string.IsNullOrEmpty(customOutputFolder))
+        {
+            WhereText.Text = summary.OutputFolders.Count == 1
+                ? $"Saved to {customOutputFolder}"
+                : $"Saved to {customOutputFolder}, keeping the original folder structure ({summary.OutputFolders.Count:N0} folders).";
+            _openFolder = customOutputFolder;
+        }
+        else if (summary.OutputFolders.Count == 1)
         {
             WhereText.Text = $"Saved in {summary.OutputFolders[0]}";
+            _openFolder = summary.OutputFolders[0];
         }
         else if (summary.OutputFolders.Count > 1)
         {
-            WhereText.Text = $"Saved in a “{folderName}” folder next to each original ({summary.OutputFolders.Count:N0} folders).";
+            WhereText.Text = $"Saved in “{folderName}” folders next to the originals ({summary.OutputFolders.Count:N0} folders).";
             OpenFolderButton.Visibility = Visibility.Collapsed;
         }
         else
@@ -76,7 +96,7 @@ public partial class SummaryWindow : Window
 
     private void OnOpenFolder(object sender, RoutedEventArgs e)
     {
-        if (_summary.OutputFolders.Count > 0) Dialogs.RevealInExplorer(_summary.OutputFolders[0]);
+        if (_openFolder != null) Dialogs.RevealInExplorer(_openFolder);
     }
 
     private void OnDone(object sender, RoutedEventArgs e) => Close();

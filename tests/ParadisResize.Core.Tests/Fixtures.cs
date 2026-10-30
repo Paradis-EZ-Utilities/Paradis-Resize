@@ -129,6 +129,105 @@ public static class Fixtures
         return path;
     }
 
+    /// <summary>
+    /// An animated WebP whose frames are flat colours (frame 1 = <paramref name="colours"/>[0], ...). With
+    /// <paramref name="transparentCorner"/> every frame has a fully transparent 10 px corner.
+    /// </summary>
+    public static string SaveAnimatedWebP(string path, int width, int height, bool transparentCorner, bool lossless, params double[][] colours)
+    {
+        var frames = colours.Select(c =>
+        {
+            using var rgb = Image.Black(width, height, bands: 3).NewFromImage(c).Cast(Enums.BandFormat.Uchar)
+                .Copy(interpretation: Enums.Interpretation.Srgb);
+            if (!transparentCorner) return rgb.Copy();
+            using var alpha = Image.Black(width, height).NewFromImage(255).Cast(Enums.BandFormat.Uchar)
+                .Mutate(m => m.DrawRect(new double[] { 0 }, 0, 0, 10, 10, fill: true));
+            return rgb.Bandjoin(alpha);
+        }).ToArray();
+        try
+        {
+            using var strip = Image.Arrayjoin(frames, across: 1);
+            using var anim = strip.Mutate(m =>
+            {
+                m.Set(GValue.GIntType, "page-height", height);
+                m.Set(GValue.ArrayIntType, "delay", Enumerable.Repeat(100, colours.Length).ToArray());
+            });
+            if (lossless) anim.Webpsave(path, lossless: true);
+            else anim.Webpsave(path, q: 90);
+        }
+        finally
+        {
+            foreach (var f in frames) f.Dispose();
+        }
+        return path;
+    }
+
+    /// <summary>
+    /// Writes a Windows BMP from a pixel function (x, y → R, G, B, A), the way Paint and other programs do.
+    /// <paramref name="bpp"/> 24 or 32 (plain), 16 (5-6-5 bit masks), 8/4/1 (palette of the colours used).
+    /// <paramref name="v5"/> writes a 124-byte header with an alpha mask (32-bit only).
+    /// </summary>
+    public static string SaveBmp(string path, int width, int height, int bpp, Func<int, int, (byte R, byte G, byte B, byte A)> pixel,
+                                 bool topDown = false, bool v5 = false)
+    {
+        var palette = new List<(byte, byte, byte)>();
+        int Index((byte R, byte G, byte B, byte A) p)
+        {
+            int i = palette.IndexOf((p.R, p.G, p.B));
+            if (i < 0) { palette.Add((p.R, p.G, p.B)); i = palette.Count - 1; }
+            if (i >= 1 << bpp) throw new ArgumentException("too many colours for the bit depth");
+            return i;
+        }
+
+        int stride = (width * bpp + 31) / 32 * 4;
+        byte[] pixels = new byte[stride * height];
+        for (int y = 0; y < height; y++)
+        {
+            int fileRow = topDown ? y : height - 1 - y;
+            int o = fileRow * stride;
+            for (int x = 0; x < width; x++)
+            {
+                var p = pixel(x, y);
+                switch (bpp)
+                {
+                    case 32: pixels[o + x * 4] = p.B; pixels[o + x * 4 + 1] = p.G; pixels[o + x * 4 + 2] = p.R; pixels[o + x * 4 + 3] = p.A; break;
+                    case 24: pixels[o + x * 3] = p.B; pixels[o + x * 3 + 1] = p.G; pixels[o + x * 3 + 2] = p.R; break;
+                    case 16:
+                        ushort v = (ushort)((p.R >> 3) << 11 | (p.G >> 2) << 5 | p.B >> 3);
+                        pixels[o + x * 2] = (byte)v; pixels[o + x * 2 + 1] = (byte)(v >> 8);
+                        break;
+                    default:
+                        int bit = x * bpp;
+                        pixels[o + (bit >> 3)] |= (byte)(Index(p) << (8 - bpp - (bit & 7)));
+                        break;
+                }
+            }
+        }
+
+        int dibSize = v5 ? 124 : 40;
+        bool masks16 = bpp == 16;
+        int maskBytes = masks16 ? 12 : 0;
+        int paletteBytes = bpp <= 8 ? palette.Count * 4 : 0;
+        int offset = 14 + dibSize + maskBytes + paletteBytes;
+        using var ms = new MemoryStream();
+        using var w = new BinaryWriter(ms);
+        w.Write("BM"u8); w.Write(offset + pixels.Length); w.Write(0); w.Write(offset);
+        w.Write(dibSize); w.Write(width); w.Write(topDown ? -height : height); w.Write((short)1); w.Write((short)bpp);
+        w.Write(masks16 || v5 ? 3 : 0); w.Write(pixels.Length); w.Write(2835); w.Write(2835);
+        w.Write(bpp <= 8 ? palette.Count : 0); w.Write(0);
+        if (v5)
+        {
+            w.Write(0x00FF0000); w.Write(0x0000FF00); w.Write(0x000000FF); w.Write(unchecked((int)0xFF000000));
+            w.Write(0x73524742); // 'sRGB'
+            w.Write(new byte[124 - 60]);
+        }
+        if (masks16) { w.Write(0xF800); w.Write(0x07E0); w.Write(0x001F); }
+        foreach (var (r, g, b) in palette) { w.Write(b); w.Write(g); w.Write(r); w.Write((byte)0); }
+        w.Write(pixels);
+        System.IO.File.WriteAllBytes(path, ms.ToArray());
+        return path;
+    }
+
     /// <summary>The colour of one pixel, as whole numbers.</summary>
     public static int[] PixelAt(string path, int x, int y)
     {

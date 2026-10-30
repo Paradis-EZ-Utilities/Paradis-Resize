@@ -2,7 +2,7 @@ namespace ParadisResize.Core.Imaging;
 
 /// <summary>
 /// Reads just enough of a WebP file's RIFF structure to tell lossless (VP8L) from lossy (VP8) storage
-/// and to spot animation. libvips decodes both kinds the same way and doesn't report which one it was,
+/// and to spot animation (for an animation, from its first frame). libvips decodes both kinds the same way and doesn't report which one it was,
 /// but the choice of how to save the copy depends on it: a lossless original stays lossless.
 /// </summary>
 public static class WebPInspector
@@ -21,13 +21,22 @@ public static class WebPInspector
             bool lossless = false, animated = false, sawImage = false;
             Span<byte> chunk = stackalloc byte[8];
             // Walk the chunks until the first image chunk. Bounded so a damaged file can't loop for long.
+            // In an animation that is inside the first frame (ANMF): 16 bytes of frame header, then the
+            // frame's own chunks (ALPH, then VP8 or VP8L).
             for (int i = 0; i < 64 && fs.Read(chunk) == 8; i++)
             {
                 var fourCc = chunk[..4];
                 uint size = BitConverter.ToUInt32(chunk[4..8]);
                 if (fourCc.SequenceEqual("VP8L"u8)) { lossless = true; sawImage = true; break; }
                 if (fourCc.SequenceEqual("VP8 "u8)) { sawImage = true; break; }
-                if (fourCc.SequenceEqual("ANIM"u8) || fourCc.SequenceEqual("ANMF"u8)) { animated = true; break; }
+                if (fourCc.SequenceEqual("ANIM"u8)) animated = true;
+                if (fourCc.SequenceEqual("ANMF"u8))
+                {
+                    animated = true;
+                    if (size < 16 || fs.Position + 16 > fs.Length) break;
+                    fs.Position += 16;
+                    continue;
+                }
                 long next = fs.Position + size + (size & 1);
                 if (next > fs.Length) break;
                 fs.Position = next;

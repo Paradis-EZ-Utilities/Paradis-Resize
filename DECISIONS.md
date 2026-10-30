@@ -60,15 +60,16 @@ correct resampling of images with transparency, CMYK JPEGs, and shrink-on-load f
 
 ## 2. Header first, format from content
 
-**Decision.** Files are recognised by their first bytes (PNG, JPEG, WebP signatures), not their
-extension, and only those three formats are ever passed to libvips, plus GIFs that carry a PNG,
-JPEG or WebP name (see 12). Headers are read for the list without decoding pixels.
+**Decision.** Files are recognised by their first bytes (PNG, JPEG, WebP, AVIF, BMP signatures),
+not their extension. Only PNG, JPEG, WebP and AVIF are ever passed to libvips, plus GIFs that carry
+a supported image name (see 12); BMPs are read by Paradis Resize's own decoder (see 14). Headers
+are read for the list without decoding pixels.
 
 **Why.** A JPEG renamed `.png` is common and must be treated as a JPEG. The bundled libvips can
-also open GIF, TIFF, HEIF, SVG and more; refusing everything else before libvips sees it keeps the
-attack surface and the behaviour exactly as specified (no animated GIF handling, no scope creep).
-Files actually named `.gif` are still not picked up.
-Animated WebP is detected and refused with "Animated image".
+also open TIFF, HEIC, SVG, PDF and more; refusing everything else before libvips sees it keeps the
+attack surface and the behaviour exactly as specified (no scope creep).
+Files actually named `.gif` are still not picked up (v1.0.1 keeps this on purpose: see 16).
+Animated WebPs give a still image of their first frame since v1.0.1 (see 13).
 
 ## 3. Originals are only ever read; copies appear only when finished
 
@@ -207,7 +208,7 @@ output folder is not remembered, so every session starts with the predictable de
 
 ## 12. GIFs with the wrong name: a still image is recovered
 
-**Decision.** A file named `.jpg`, `.png` or `.webp` that is really a GIF (common with downloaded
+**Decision.** A file named `.jpg`, `.png` or `.webp` (and, since v1.0.1, `.bmp` or `.avif`) that is really a GIF (common with downloaded
 pictures) is not refused. Its first frame is decoded, as libvips does by default, and treated as a
 PNG from then on: the same resize, the same transparency checks and the same conversion rules.
 
@@ -228,3 +229,84 @@ PNG from then on: the same resize, the same transparency checks and the same con
 Recovering a still keeps Paradis Resize a still-image tool: there is no animation support of any
 kind, and files named `.gif` are still left alone.
 
+## 13. Animated WebP: a still image is recovered from the first frame (v1.0.1)
+
+**Decision.** An animated WebP is no longer refused with "Animated image". Its first frame is decoded
+(libvips' default, page 0, composited onto the full canvas) and processed as a still image. This
+follows the GIF recovery in 12, with one difference: the copy stays a **WebP** by default.
+
+- Same format as original saves a still WebP: lossless if the first frame is stored losslessly
+  (VP8L), otherwise high-quality lossy (quality 85), exactly like a still WebP. Transparency is kept.
+- Optimize with "Allow format conversion": an opaque frame becomes a JPEG under the usual rule (JPEG
+  at most half the size of the WebP). With transparency it stays WebP.
+- Save as PNG/JPEG/WebP is respected; Save as JPEG on a frame with transparency is skipped.
+- Never "copied unchanged" or "Already efficient": that would copy the animation. Every copy is
+  checked to be a single still image before it is kept.
+- Status "Done (animated → still WebP)" (or JPEG/PNG), list format "WebP (animated)", a tooltip and
+  log line saying how many frames there were and that the animation was not kept, and its own line
+  in the summary.
+- Left out of the space saved, with no "% saved" on the row, like recovered GIFs: dropping 49 of 50
+  frames isn't compression.
+
+**Why WebP and not PNG (as for GIFs).** WebP is one of the formats Paradis Resize writes, so keeping
+it is the least surprising "same format", it keeps transparency, and the frame keeps its own
+storage (a lossy photo frame as PNG could be several times larger than the whole animation). GIF
+isn't a format Paradis Resize writes, so recovered GIFs need another home; PNG is exact for them.
+
+## 14. BMP input, PNG output (v1.0.1)
+
+**Decision.** `.bmp` files are added and processed. BMP is read, never written: "Same format as
+original" saves a **PNG** (lossless, so nothing is lost), or a JPEG under the usual conversion rule
+when "Allow format conversion" is on and the image is an opaque photo. Status "Done (BMP → PNG)".
+A BMP is never "copied unchanged", since that would just give another BMP.
+
+The bundled libvips has no BMP reader (its BMP support goes through ImageMagick, which isn't in the
+NetVips build), so `BmpDecoder` reads BMPs itself: 1, 4 and 8-bit palettes (plain or RLE), 16-bit
+(5-5-5 or bit masks), 24-bit and 32-bit, bottom-up or top-down, with the v3, v4 and v5 headers that
+Windows, Paint, Photoshop, GIMP and scanners write. Checked against ImageMagick's and Pillow's BMPs.
+- Transparency: 32-bit BMPs with an alpha mask, or whose 4th byte isn't zero everywhere, keep their
+  transparency. Plain 32-bit BMPs whose 4th byte is all zero are opaque (it's padding, as Windows and
+  browsers treat it).
+- Safety: every size in the header is checked against the real file size before any memory is set
+  aside, so a damaged header fails at once with "Damaged or incomplete" instead of trying to allocate
+  gigabytes. BMPs that embed a JPEG or PNG, and OS/2-only variants, are "Not a supported image".
+- Memory: a BMP is uncompressed, so it is decoded whole (width × height × 3 or 4 bytes; 360 MB for a
+  12000 × 10000 BMP, which is itself a 360 MB file). Large PNGs and JPEGs still stream.
+
+## 15. AVIF input, kept as AVIF (v1.0.1)
+
+**Decision.** `.avif` files are added and processed. The bundled `libvips-42.dll` already contains
+libheif 1.23.5 with the aom 3.15.1 AV1 codec, which both decodes and encodes AVIF, so this needs no
+new dependency, no new file in the ZIP and no packaging change. AVIF stays AVIF for "Same format as
+original" (quality 60, effort 4, 8-bit; about 5 s for a 12-megapixel photo on 4 cores), with the
+usual lossy rule in Optimize (kept only if at least 10% smaller, otherwise copied unchanged). Save as
+PNG, JPEG or WebP works as for any image; AVIF is not added to the Save as menu, and nothing else is
+ever converted to AVIF. Transparency is kept.
+
+- HEIC files share AVIF's container but need a codec that isn't bundled; they are recognised by
+  their brand and stay "Not a supported image". An AVIF holding several images is refused as
+  "Animated image".
+- AVIF can be lossless, but a lossless AVIF can't be told apart cheaply; in Optimize it would be
+  re-saved lossy if that saved 10%. Lossless AVIFs are rare (they are usually larger than PNG).
+
+## 16. Files whose extension doesn't match their contents (v1.0.1)
+
+**Decision.** A file whose extension isn't one Paradis Resize lists gets one small look at its first
+64 bytes. If they clearly show a PNG, JPEG, WebP, BMP or AVIF, the file is added and processed as
+what it really is (eight JPEGs named `.tiff` in testing). The original keeps its name; the copy gets
+the extension that matches its contents (`Holiday.tiff` → `Resized\Holiday.jpg`, also when copied
+unchanged). The log and the row's tooltip say that the extension didn't match.
+
+- Never added this way: GIF contents (so `.gif` files keep their animation and stay out of scans;
+  GIFs are only recovered when their name says PNG/JPEG/WebP/BMP/AVIF, see 12), TIFF, HEIC, JPEG XR
+  (`.wdp`), and anything unrecognised, such as an app database (`.realm`) or an empty file.
+- Cheap and safe: one 64-byte read, only for files with other extensions. Files that are stored only
+  online (OneDrive "files on demand") aren't opened at all, as reading them would download them.
+
+## 17. Every ignored file is logged (v1.0.1)
+
+**Decision.** Adding files still logs "Added N image(s); M other file(s) ignored", followed by one
+line per ignored file with its full path, extension and reason ("not a supported image type",
+"GIF files aren't processed", "TIFF image, which isn't a supported format", "empty file (0 bytes)"),
+one line per file added by its contents, and one per leftover `.partial` file. The window itself
+doesn't list them, to keep it uncluttered; the "No images found" message points to the log.
