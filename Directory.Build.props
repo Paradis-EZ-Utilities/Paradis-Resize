@@ -6,6 +6,7 @@
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <!-- The one place the release version is defined. Change only these two lines.
          VersionPrefix: MAJOR.MINOR.PATCH. VersionSuffix: empty for a release, "rc.N" for a candidate.
+         (src/ParadisResize/app.manifest also has it, as VERSION.0; the packaging script checks it.)
          Everything else is derived: Version ("1.0.0" or "1.0.0-rc.N") is the version shown in the
          window, About and the log, the exe's Product version, and the release folder/ZIP names
          (packaging/package-windows.sh reads it with `dotnet msbuild -getProperty:Version`);

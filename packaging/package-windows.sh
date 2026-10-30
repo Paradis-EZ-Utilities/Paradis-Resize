@@ -28,6 +28,9 @@ test -f publish/win-x64/libvips-42.dll || { echo "publish/win-x64/libvips-42.dll
 python3 -c 'import sys; d=open(sys.argv[1],"rb").read(); sys.exit(("ProductVersion\0".encode("utf-16-le") not in d) or ((sys.argv[2]+"\0").encode("utf-16-le") not in d))' \
   publish/win-x64/ParadisResize.exe "$VER" \
   || { echo "publish/win-x64/ParadisResize.exe is not a $VER build; publish again" >&2; exit 1; }
+# The app manifest carries its own copy of the version (Windows reads it as VERSION.0).
+grep -q "assemblyIdentity version=\"${VER%%-*}.0\"" src/ParadisResize/app.manifest \
+  || { echo "src/ParadisResize/app.manifest assemblyIdentity version is not ${VER%%-*}.0" >&2; exit 1; }
 # The DLL must be the one from the NuGet package, unmodified.
 cmp -s publish/win-x64/libvips-42.dll "$VIPS/runtimes/win-x64/native/libvips-42.dll" \
   || { echo "publish/win-x64/libvips-42.dll differs from the NuGet package's" >&2; exit 1; }

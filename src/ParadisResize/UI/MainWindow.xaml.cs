@@ -242,8 +242,12 @@ public partial class MainWindow : Window
         int count = _items.Count;
         long bytes = _items.Sum(i => i.Info?.FileSize ?? 0);
         int unreadable = _items.Count(i => i.State == QueueState.Unreadable);
+        // Sizes arrive as each header is read in the background; until every image has one, the sum is
+        // only part of the total, so it isn't shown as if it were final.
+        bool sizing = _scansRunning > 0 || _items.Any(i => i.Info == null && i.State != QueueState.Unreadable);
         string text = count == 1 ? "1 image" : $"{count:N0} images";
-        if (bytes > 0) text += $" · {Units.FormatSize(bytes)}";
+        if (count > 0 && sizing) text += " · Calculating size…";
+        else if (bytes > 0) text += $" · {Units.FormatSize(bytes)}";
         if (unreadable > 0) text += $" · {unreadable} can't be read";
         if (_scansRunning > 0) text += " · adding…";
         QueueSummaryText.Text = text;
@@ -588,7 +592,7 @@ public partial class MainWindow : Window
             Close();
             return;
         }
-        if (summary != null) new SummaryWindow(summary, job.Mode) { Owner = this }.ShowDialog();
+        if (summary != null) new SummaryWindow(summary, job.Mode, job.CustomOutputFolder) { Owner = this }.ShowDialog();
     }
 
     private void OnCancel(object sender, RoutedEventArgs e)
